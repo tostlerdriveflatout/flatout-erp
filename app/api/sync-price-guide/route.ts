@@ -307,18 +307,12 @@ rows.slice(1).forEach((row, index) => {
     })
   } catch (error: any) {
     console.error('Price Guide sync failed:', error)
-
-   return NextResponse.json({
-  success: errors.length === 0,
-  spreadsheet: 'FSR Rig build out',
-  tab: SHEET_TAB,
-  rows_found: rows.length - 1,
-  products_processed: products.length,
-  added,
-  updated,
-  skipped,
-  skipped_details: skippedDetails,
-  errors,
-  synced_by: user.email,
-  synced_at: new Date().toISOString(),
-})
+        return NextResponse.json(
+      {
+        error: 'Price Guide sync failed.',
+        details: error?.message || String(error),
+      },
+      { status: 500 }
+    )
+  }
+}
