@@ -28,13 +28,18 @@ async function syncPriceGuide(){
 
     await load();
 
-    alert(
-      `Price Guide sync complete!\n\n`+
-      `Added: ${result.added}\n`+
-      `Updated: ${result.updated}\n`+
-      `Skipped: ${result.skipped}`+
-      (result.errors?.length?`\n\nErrors: ${result.errors.length}`:'')
-    );
+alert(
+  `Price Guide sync complete!\n\n`+
+  `Added: ${result.added}\n`+
+  `Updated: ${result.updated}\n`+
+  `Skipped: ${result.skipped}`+
+  (result.skipped_details?.length
+    ? `\n\nSkipped Details:\n${result.skipped_details.join('\n')}`
+    : '')+
+  (result.errors?.length
+    ? `\n\nErrors:\n${result.errors.join('\n')}`
+    : '')
+)
   }catch(error){
     console.error(error);
     alert('Price Guide sync failed. Please try again.');
