@@ -218,10 +218,23 @@ export async function POST(request: NextRequest) {
     // 6. Add/update products in Supabase
     // -------------------------------------------------------
 
-    let added = 0
-    let updated = 0
-    const skipped = rows.length - 1 - products.length
-    const errors: string[] = []
+   let added = 0
+let updated = 0
+const skipped = rows.length - 1 - products.length
+const skippedDetails: string[] = []
+const errors: string[] = []
+
+rows.slice(1).forEach((row, index) => {
+  const name = cleanText(row[descriptionIndex])
+  const sellPrice = cleanMoney(row[retailIndex])
+  const sheetRow = index + 2
+
+  if (!name) {
+    skippedDetails.push(`Row ${sheetRow}: Missing Description`)
+  } else if (sellPrice === null) {
+    skippedDetails.push(`Row ${sheetRow}: ${name} — Missing or invalid Retail price`)
+  }
+})
 
     for (const product of products) {
       const { source_row, ...payload } = product
@@ -295,12 +308,17 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Price Guide sync failed:', error)
 
-    return NextResponse.json(
-      {
-        error: 'Price Guide sync failed.',
-        details: error?.message || String(error),
-      },
-      { status: 500 }
-    )
-  }
-}
+   return NextResponse.json({
+  success: errors.length === 0,
+  spreadsheet: 'FSR Rig build out',
+  tab: SHEET_TAB,
+  rows_found: rows.length - 1,
+  products_processed: products.length,
+  added,
+  updated,
+  skipped,
+  skipped_details: skippedDetails,
+  errors,
+  synced_by: user.email,
+  synced_at: new Date().toISOString(),
+})
