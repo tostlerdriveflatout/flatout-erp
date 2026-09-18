@@ -1,6 +1,15 @@
 'use client';import {useEffect,useMemo,useState} from 'react';import {supabase} from '@/lib/supabase-browser';import {useRouter} from 'next/navigation';
-type Customer={id:string,name:string,company:string|null,email:string|null,phone:string|null};type Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};type Order={id:string,order_number:string,status:string,payment_status:string,tax_rate:number,customer_id:string,shipping_address:string|null,reference_number:string|null,created_at?:string,customers?:Customer,order_items?:Item[],payments?:Payment[],order_notes?:OrderNote[]};type PurchaseOrderItem={id:string,purchase_order_id:string,order_item_id:string|null,description:string,sku:string|null,qty:number,unit_cost:number|null,sort_order:number};type PurchaseOrder={id:string,po_number:string,order_id:string,vendor:string,notes:string|null,status:string,created_at:string,purchase_order_items?:PurchaseOrderItem[],orders?:Order};type OrderNote={id:string,order_id:string,note:string,created_at:string,created_by:string|null};type Item={id:string,order_id:string,product_id:string|null,item_type:string,description:string,sku:string|null,vendor:string|null,qty:number,sell_price:number,cost:number|null,purchasing_status:string,tracking:string|null,notes:string|null};
-export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');async function load(){let [c,p,o,po]=await Promise.all([s.from('customers').select('*').order('name'),s.from('products').select('*').eq('active',true).order('name'),s.from('orders').select('*,customers(*),order_items(*),payments(*),order_notes(*)').order('created_at',{ascending:false}),s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').order('created_at',{ascending:false})]);setCustomers(c.data||[]);setProducts(p.data||[]);setOrders((o.data||[]) as any);setPurchaseOrders((po.data||[]) as any)}useEffect(()=>{load()},[]);const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
+type type Customer={
+  id:string,
+  name:string,
+  company:string|null,
+  email:string|null,
+  phone:string|null,
+  billing_address:string|null,
+  shipping_address:string|null,
+  notes:string|null
+}; Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};type Order={id:string,order_number:string,status:string,payment_status:string,tax_rate:number,customer_id:string,shipping_address:string|null,reference_number:string|null,created_at?:string,customers?:Customer,order_items?:Item[],payments?:Payment[],order_notes?:OrderNote[]};type PurchaseOrderItem={id:string,purchase_order_id:string,order_item_id:string|null,description:string,sku:string|null,qty:number,unit_cost:number|null,sort_order:number};type PurchaseOrder={id:string,po_number:string,order_id:string,vendor:string,notes:string|null,status:string,created_at:string,purchase_order_items?:PurchaseOrderItem[],orders?:Order};type OrderNote={id:string,order_id:string,note:string,created_at:string,created_by:string|null};type Item={id:string,order_id:string,product_id:string|null,item_type:string,description:string,sku:string|null,vendor:string|null,qty:number,sell_price:number,cost:number|null,purchasing_status:string,tracking:string|null,notes:string|null};
+export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null)[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[editingCustomer,setEditingCustomer]=useState<Customer|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');async function load(){let [c,p,o,po]=await Promise.all([s.from('customers').select('*').order('name'),s.from('products').select('*').eq('active',true).order('name'),s.from('orders').select('*,customers(*),order_items(*),payments(*),order_notes(*)').order('created_at',{ascending:false}),s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').order('created_at',{ascending:false})]);setCustomers(c.data||[]);setProducts(p.data||[]);setOrders((o.data||[]) as any);setPurchaseOrders((po.data||[]) as any)}useEffect(()=>{load()},[]);const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
 async function syncPriceGuide(){
   if(!confirm('Sync the Product Catalog with the Google Price Guide?'))return;
 
@@ -46,6 +55,27 @@ alert(
   }
 }
 async function createCustomer(fd:FormData){await s.from('customers').insert({name:fd.get('name'),company:fd.get('company')||null,email:fd.get('email')||null,phone:fd.get('phone')||null});setModal('');load()}
+  async function updateCustomer(fd:FormData){
+  const id=String(fd.get('id'));
+  const {error}=await s.from('customers').update({
+    name:fd.get('name'),
+    company:fd.get('company')||null,
+    email:fd.get('email')||null,
+    phone:fd.get('phone')||null,
+    billing_address:fd.get('billing_address')||null,
+    shipping_address:fd.get('shipping_address')||null,
+    notes:fd.get('notes')||null
+  }).eq('id',id);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+ setModal('');
+setEditingCustomer(null);
+await load();
+}                                                        
 async function createOrder(fd:FormData){let customer=String(fd.get('customer_id')),tax=Number(fd.get('tax_rate')||0),reference=String(fd.get('reference_number')||'').trim();let {data}=await s.from('orders').insert({customer_id:customer,reference_number:reference||null,tax_rate:tax,status:'Draft',payment_status:'Not Invoiced'}).select('*,customers(*),order_items(*),payments(*),order_notes(*)').single();setModal('');await load();if(data){setSelected(data as any);setTab('Order')}}
 async function addProduct(pid:string){if(!selected)return;let p=products.find(x=>x.id===pid);if(!p)return;await s.from('order_items').insert({order_id:selected.id,product_id:p.id,item_type:'Product',description:p.name,sku:p.sku,vendor:p.vendor,qty:1,sell_price:p.sell_price,cost:p.cost,purchasing_status:'Need to Order'});await refreshOrder()}
 async function addOther(fd:FormData){if(!selected)return;let type=String(fd.get('item_type')),sell=Number(fd.get('sell_price')||0);if(type==='Discount'&&sell>0)sell=-sell;await s.from('order_items').insert({order_id:selected.id,item_type:type,description:fd.get('description'),qty:Number(fd.get('qty')||1),sell_price:sell,cost:fd.get('cost')?Number(fd.get('cost')):null,purchasing_status:'N/A'});setModal('');refreshOrder()}
@@ -63,7 +93,23 @@ async function addPayment(fd:FormData){if(!selected)return;const amount=Number(f
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
 return <div className="shell"><aside className="side"><img className="logo" src="/flatout-logo.svg"/><div className="nav">{['Dashboard','Customers','Products','Orders','Purchasing','Purchase Orders'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>{setTab(x);setSelected(null);setSelectedPO(null)}}>{x}</button>)}</div></aside><main className="main"><div className="top"><div><b>{selected?(tab==='Invoice'?`${selected.order_number} — Invoice`:selected.order_number):selectedPO&&tab==='Purchase Order'?`${selectedPO.po_number} — Purchase Order`:tab}</b><div className="muted">Flatout Sim Racing ERP</div></div><div className="row"><span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
 {tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{orders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div><div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Sell</th><th>Margin</th></tr></thead><tbody>{orders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td>{o.order_number}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${t.sell.toLocaleString()}</td><td>{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
-{tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}><td><b>{c.name}</b></td><td>{c.company}</td><td>{c.email}</td><td>{c.phone}</td></tr>)}</tbody></table></div></>}
+{tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}>
+  <td><b>{c.name}</b></td>
+  <td>{c.company}</td>
+  <td>{c.email}</td>
+  <td>{c.phone}</td>
+  <td>
+    <button
+      className="btn secondary"
+      onClick={()=>{
+        setEditingCustomer(c);
+        setModal('editCustomer');
+      }}
+    >
+      Edit
+    </button>
+  </td>
+</tr>)}</tbody></table></div></>}
 {tab==='Products'&&<><div className="row" style={{justifyContent:'space-between'}}>
   <div className="row">
     <b>Product catalog</b>
@@ -77,7 +123,63 @@ return <div className="shell"><aside className="side"><img className="logo" src=
 {tab==='Purchase Order'&&selectedPO&&<PurchaseOrderView po={selectedPO} back={()=>{setSelectedPO(null);setTab('Purchase Orders')}}/>}
 {tab==='Order'&&selected&&<OrderView o={selected} products={products} totals={totals(selected)} addProduct={addProduct} addOther={()=>setModal('other')} openInvoice={openInvoice} dup={dup} del={del} updateItem={updateItem} updateShippingAddress={updateShippingAddress} updateReferenceNumber={updateReferenceNumber} updateOrderStatus={updateOrderStatus} createPurchaseOrder={createPurchaseOrder} purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setTab('Purchase Order')}} addOrderNote={addOrderNote}/>}
 {tab==='Invoice'&&selected&&<InvoiceView o={selected} totals={totals(selected)} back={()=>setTab('Order')} addPayment={()=>setModal('payment')}/>} </div></main>
-{modal&&<div className="modalbg" onMouseDown={()=>setModal('')}><div className="modal" onMouseDown={e=>e.stopPropagation()}>{modal==='customer'&&<form action={createCustomer}><h2>New Customer</h2><div className="grid">{['name','company','email','phone'].map(n=><div className="field" key={n}><label>{n}</label><input name={n} required={n==='name'}/></div>)}</div><button className="btn">Create Customer</button></form>}{modal==='order'&&<form action={createOrder}><h2>New Order</h2><div className="grid"><div className="field"><label>Customer</label><input list="cust" placeholder="Type to search" onChange={e=>{let c=customers.find(x=>x.name===e.target.value);let h=document.getElementById('cid') as HTMLInputElement;if(h)h.value=c?.id||''}}/><datalist id="cust">{customers.map(c=><option key={c.id} value={c.name}>{c.company||c.email}</option>)}</datalist><input id="cid" name="customer_id" type="hidden" required/></div><div className="field"><label>Reference #</label><input name="reference_number" placeholder="e.g. PO Mansell"/></div><div className="field"><label>Tax Rate %</label><input name="tax_rate" type="number" step=".01" defaultValue="7.45"/></div></div><p className="muted">Total is calculated from order items.</p><button className="btn">Create Order</button></form>}{modal==='other'&&<form action={addOther}><h2>Add Labor / Other</h2><div className="grid"><div className="field"><label>Type</label><select name="item_type"><option>Labor/Service</option><option>Shipping</option><option>Miscellaneous</option><option>Discount</option></select></div><div className="field"><label>Description</label><input name="description" required/></div><div className="field"><label>Qty</label><input name="qty" type="number" defaultValue="1"/></div><div className="field"><label>Sell Price</label><input name="sell_price" type="number" step=".01" required/></div><div className="field"><label>Internal Cost</label><input name="cost" type="number" step=".01" placeholder="Optional"/></div></div><button className="btn">Add Item</button></form>}{modal==='payment'&&selected&&<form action={addPayment}><h2>Record Payment</h2><div className="grid"><div className="field"><label>Amount</label><input name="amount" type="number" step=".01" min="0.01" required/></div><div className="field"><label>Payment Method</label><select name="payment_method"><option>Credit Card</option><option>ACH</option><option>Wire</option><option>Check</option><option>Cash</option><option>Other</option></select></div><div className="field"><label>Reference / Confirmation</label><input name="reference"/></div></div><div className="field"><label>Notes</label><input name="notes"/></div><button className="btn">Record Payment</button></form>}</div></div>}</div>}
+{modal&&<div className="modalbg" onMouseDown={()=>setModal('')}><div className="modal" onMouseDown={e=>e.stopPropagation()}>{modal==='customer'&&<form action={createCustomer}><h2>New Customer</h2><div className="grid">{['name','company','email','phone'].map(n=><div className="field" key={n}><label>{n}</label><input name={n} required={n==='name'}/></div>)}</div><button className="btn">Create Customer</button></form>} {modal==='editCustomer'&&editingCustomer&&
+<form action={updateCustomer}>
+  <h2>Edit Customer</h2>
+
+  <input type="hidden" name="id" value={editingCustomer.id}/>
+
+  <div className="grid">
+    <div className="field">
+      <label>Name</label>
+      <input name="name" defaultValue={editingCustomer.name} required/>
+    </div>
+
+    <div className="field">
+      <label>Company</label>
+      <input name="company" defaultValue={editingCustomer.company||''}/>
+    </div>
+
+    <div className="field">
+      <label>Email</label>
+      <input name="email" type="email" defaultValue={editingCustomer.email||''}/>
+    </div>
+
+    <div className="field">
+      <label>Phone</label>
+      <input name="phone" defaultValue={editingCustomer.phone||''}/>
+    </div>
+
+    <div className="field">
+      <label>Billing Address</label>
+      <textarea name="billing_address" rows={3} defaultValue={editingCustomer.billing_address||''}/>
+    </div>
+
+    <div className="field">
+      <label>Shipping Address</label>
+      <textarea name="shipping_address" rows={3} defaultValue={editingCustomer.shipping_address||''}/>
+    </div>
+  </div>
+
+  <div className="field">
+    <label>Customer Notes</label>
+    <textarea name="notes" rows={4} defaultValue={editingCustomer.notes||''}/>
+  </div>
+
+  <div className="row">
+    <button className="btn">Save Customer</button>
+    <button
+      type="button"
+      className="btn secondary"
+      onClick={()=>{
+        setModal('');
+        setEditingCustomer(null);
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+</form>}{modal==='order'&&<form action={createOrder}><h2>New Order</h2><div className="grid"><div className="field"><label>Customer</label><input list="cust" placeholder="Type to search" onChange={e=>{let c=customers.find(x=>x.name===e.target.value);let h=document.getElementById('cid') as HTMLInputElement;if(h)h.value=c?.id||''}}/><datalist id="cust">{customers.map(c=><option key={c.id} value={c.name}>{c.company||c.email}</option>)}</datalist><input id="cid" name="customer_id" type="hidden" required/></div><div className="field"><label>Reference #</label><input name="reference_number" placeholder="e.g. PO Mansell"/></div><div className="field"><label>Tax Rate %</label><input name="tax_rate" type="number" step=".01" defaultValue="7.45"/></div></div><p className="muted">Total is calculated from order items.</p><button className="btn">Create Order</button></form>}{modal==='other'&&<form action={addOther}><h2>Add Labor / Other</h2><div className="grid"><div className="field"><label>Type</label><select name="item_type"><option>Labor/Service</option><option>Shipping</option><option>Miscellaneous</option><option>Discount</option></select></div><div className="field"><label>Description</label><input name="description" required/></div><div className="field"><label>Qty</label><input name="qty" type="number" defaultValue="1"/></div><div className="field"><label>Sell Price</label><input name="sell_price" type="number" step=".01" required/></div><div className="field"><label>Internal Cost</label><input name="cost" type="number" step=".01" placeholder="Optional"/></div></div><button className="btn">Add Item</button></form>}{modal==='payment'&&selected&&<form action={addPayment}><h2>Record Payment</h2><div className="grid"><div className="field"><label>Amount</label><input name="amount" type="number" step=".01" min="0.01" required/></div><div className="field"><label>Payment Method</label><select name="payment_method"><option>Credit Card</option><option>ACH</option><option>Wire</option><option>Check</option><option>Cash</option><option>Other</option></select></div><div className="field"><label>Reference / Confirmation</label><input name="reference"/></div></div><div className="field"><label>Notes</label><input name="notes"/></div><button className="btn">Record Payment</button></form>}</div></div>}</div>}
 function PurchasingView({orders,updateItem,createPurchaseOrder,openOrder}:any){const [showReceived,setShowReceived]=useState(false),[search,setSearch]=useState(''),[selectedIds,setSelectedIds]=useState<string[]>([]);const rows=orders.flatMap((o:any)=>(o.order_items||[]).filter((i:any)=>i.item_type==='Product').map((i:any)=>({item:i,order:o}))).filter((x:any)=>showReceived||x.item.purchasing_status!=='Received').filter((x:any)=>{const q=search.trim().toLowerCase();return !q||[x.order.order_number,x.order.reference_number,x.order.customers?.name,x.item.description,x.item.sku,x.item.vendor,x.item.purchasing_status,x.item.tracking].some((v:any)=>(v||'').toLowerCase().includes(q))});const counts=['Need to Order','Ordered','Backordered','Shipped','Received'].map(st=>({st,n:orders.flatMap((o:any)=>o.order_items||[]).filter((i:any)=>i.item_type==='Product'&&i.purchasing_status===st).length}));const chosen=rows.filter((x:any)=>selectedIds.includes(x.item.id));const canPO=chosen.length>0&&chosen.every((x:any)=>x.order.id===chosen[0].order.id&&x.item.vendor===chosen[0].item.vendor)&&!!chosen[0].order.reference_number;function toggle(x:any,checked:boolean){if(checked&&selectedIds.length){const first=rows.find((r:any)=>r.item.id===selectedIds[0]);if(first&&(first.order.id!==x.order.id||first.item.vendor!==x.item.vendor)){alert('Select items from the same Sales Order and vendor for one PO.');return}}setSelectedIds(v=>checked?[...new Set([...v,x.item.id])]:v.filter(id=>id!==x.item.id))}return <><div className="row" style={{justifyContent:'space-between',marginBottom:18}}><div><h1>Parts Purchasing</h1><div className="muted">Company-wide purchasing overview. Open an order to manage purchasing for one customer.</div></div><div className="row"><input placeholder="Search order, customer, part, SKU or vendor" value={search} onChange={e=>setSearch(e.target.value)} style={{width:360}}/><label className="row" style={{gap:7}}><input type="checkbox" checked={showReceived} onChange={e=>setShowReceived(e.target.checked)}/> Show Received</label></div></div><div className="cards">{counts.map(x=><div className="card" key={x.st}><div className="muted">{x.st}</div><div className="value">{x.n}</div></div>)}</div>{selectedIds.length>0&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><b>{selectedIds.length} item{selectedIds.length===1?'':'s'} selected</b>{chosen[0]&&<div className="muted">{chosen[0].item.vendor} • {chosen[0].order.reference_number||'Reference # required'}</div>}</div><div className="row"><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(chosen[0].order,chosen.map((x:any)=>x.item));setSelectedIds([])}}>Create PO</button></div></div></div>}<div className="panel"><table><thead><tr><th></th><th>Order / Customer</th><th>Part</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Tracking</th></tr></thead><tbody>{rows.map(({item:i,order:o}:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>toggle({item:i,order:o},e.target.checked)}/></td><td><button className="btn ghost" onClick={()=>openOrder(o)}>{o.order_number}</button>{o.reference_number&&<div><b>{o.reference_number}</b></div>}<div className="muted">{o.customers?.name||'—'}</div></td><td><b>{i.description}</b>{i.sku&&<div className="muted">SKU: {i.sku}</div>}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><td><input key={`${i.id}-${i.tracking||''}`} defaultValue={i.tracking||''} placeholder="Tracking #" onBlur={e=>{if(e.target.value!==(i.tracking||''))updateItem(i,'tracking',e.target.value||null)}} style={{minWidth:150}}/></td></tr>)}{rows.length===0&&<tr><td colSpan={7} className="muted">No purchasing items match this view.</td></tr>}</tbody></table></div></>}
 
 function PurchaseOrdersView({purchaseOrders,openPO}:any){return <><div style={{marginBottom:18}}><h1>Purchase Orders</h1><div className="muted">Vendor POs created from Parts Purchasing.</div></div><div className="panel"><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Sales Order</th><th>Customer</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{purchaseOrders.map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{po.orders?.order_number||'—'}</td><td>{po.orders?.customers?.name||'—'}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{purchaseOrders.length===0&&<tr><td colSpan={7} className="muted">No purchase orders yet.</td></tr>}</tbody></table></div></>}
