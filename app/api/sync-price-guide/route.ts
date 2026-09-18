@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
@@ -22,29 +22,75 @@ function cleanMoney(value: unknown): number | null {
 
 function cleanText(value: unknown): string | null {
   if (value === null || value === undefined) return null
+
   const text = String(value).trim()
   return text || null
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-    const spreadsheetId = process.env.GOOGLE_PRICE_GUIDE_SHEET_ID
+    // -------------------------------------------------------
+    // 1. Verify the user is logged into Flatout ERP
+    // -------------------------------------------------------
+
+    const authHeader = request.headers.get('authorization')
+
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Please log into Flatout ERP.' },
+        { status: 401 }
+      )
+    }
+
+    const accessToken = authHeader.substring(7)
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (!serviceAccountEmail || !privateKey || !spreadsheetId) {
+    if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json(
-        { error: 'Google Price Guide environment variables are missing.' },
+        { error: 'Supabase environment variables are missing.' },
         { status: 500 }
       )
     }
 
-    if (!supabaseUrl || !supabaseKey) {
+    const authSupabase = createClient(supabaseUrl, supabaseKey)
+
+    const {
+      data: { user },
+      error: userError,
+    } = await authSupabase.auth.getUser(accessToken)
+
+    if (userError || !user) {
       return NextResponse.json(
-        { error: 'Supabase environment variables are missing.' },
+        { error: 'Unauthorized. Your login session is invalid or expired.' },
+        { status: 401 }
+      )
+    }
+
+    // -------------------------------------------------------
+    // 2. Create a Supabase client using the logged-in user
+    // -------------------------------------------------------
+
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    })
+
+    // -------------------------------------------------------
+    // 3. Connect securely to the Google Price Guide
+    // -------------------------------------------------------
+
+    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+    const spreadsheetId = process.env.GOOGLE_PRICE_GUIDE_SHEET_ID
+
+    if (!serviceAccountEmail || !privateKey || !spreadsheetId) {
+      return NextResponse.json(
+        { error: 'Google Price Guide environment variables are missing.' },
         { status: 500 }
       )
     }
@@ -73,6 +119,10 @@ export async function POST() {
         { status: 400 }
       )
     }
+
+    // -------------------------------------------------------
+    // 4. Find Price Guide columns
+    // -------------------------------------------------------
 
     const headers = rows[0].map((header) =>
       String(header || '').trim().toLowerCase()
@@ -108,19 +158,27 @@ export async function POST() {
       )
     }
 
+    // -------------------------------------------------------
+    // 5. Convert Google Sheet rows into ERP products
+    // -------------------------------------------------------
+
     const products = rows
       .slice(1)
       .map((row, index) => {
         const name = cleanText(row[descriptionIndex])
         const sellPrice = cleanMoney(row[retailIndex])
 
+        // Skip blank rows or products without a Retail price
         if (!name || sellPrice === null) return null
 
         const sku = cleanText(row[skuIndex])
         const vendor =
           companyIndex >= 0 ? cleanText(row[companyIndex]) : null
+
         const category = cleanText(row[categoryIndex])
+
         const cost = cleanMoney(row[costIndex])
+
         const imageRef =
           imageIndex >= 0 ? cleanText(row[imageIndex]) : null
 
@@ -156,7 +214,9 @@ export async function POST() {
         source_row: number
       }>
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    // -------------------------------------------------------
+    // 6. Add/update products in Supabase
+    // -------------------------------------------------------
 
     let added = 0
     let updated = 0
@@ -175,7 +235,12 @@ export async function POST() {
       } else {
         existingQuery = existingQuery
           .eq('name', product.name)
-          .eq('vendor', product.vendor || '')
+
+        if (product.vendor) {
+          existingQuery = existingQuery.eq('vendor', product.vendor)
+        } else {
+          existingQuery = existingQuery.is('vendor', null)
+        }
       }
 
       const { data: existing, error: lookupError } =
@@ -210,6 +275,10 @@ export async function POST() {
       }
     }
 
+    // -------------------------------------------------------
+    // 7. Return sync results
+    // -------------------------------------------------------
+
     return NextResponse.json({
       success: errors.length === 0,
       spreadsheet: 'FSR Rig build out',
@@ -220,6 +289,7 @@ export async function POST() {
       updated,
       skipped,
       errors,
+      synced_by: user.email,
       synced_at: new Date().toISOString(),
     })
   } catch (error: any) {
