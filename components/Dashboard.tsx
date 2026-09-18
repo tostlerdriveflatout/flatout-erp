@@ -1,7 +1,52 @@
 'use client';import {useEffect,useMemo,useState} from 'react';import {supabase} from '@/lib/supabase-browser';import {useRouter} from 'next/navigation';
 type Customer={id:string,name:string,company:string|null,email:string|null,phone:string|null};type Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};type Order={id:string,order_number:string,status:string,payment_status:string,tax_rate:number,customer_id:string,shipping_address:string|null,reference_number:string|null,created_at?:string,customers?:Customer,order_items?:Item[],payments?:Payment[],order_notes?:OrderNote[]};type PurchaseOrderItem={id:string,purchase_order_id:string,order_item_id:string|null,description:string,sku:string|null,qty:number,unit_cost:number|null,sort_order:number};type PurchaseOrder={id:string,po_number:string,order_id:string,vendor:string,notes:string|null,status:string,created_at:string,purchase_order_items?:PurchaseOrderItem[],orders?:Order};type OrderNote={id:string,order_id:string,note:string,created_at:string,created_by:string|null};type Item={id:string,order_id:string,product_id:string|null,item_type:string,description:string,sku:string|null,vendor:string|null,qty:number,sell_price:number,cost:number|null,purchasing_status:string,tracking:string|null,notes:string|null};
 export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');async function load(){let [c,p,o,po]=await Promise.all([s.from('customers').select('*').order('name'),s.from('products').select('*').eq('active',true).order('name'),s.from('orders').select('*,customers(*),order_items(*),payments(*),order_notes(*)').order('created_at',{ascending:false}),s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').order('created_at',{ascending:false})]);setCustomers(c.data||[]);setProducts(p.data||[]);setOrders((o.data||[]) as any);setPurchaseOrders((po.data||[]) as any)}useEffect(()=>{load()},[]);const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
-async function createCustomer(fd:FormData){await s.from('customers').insert({name:fd.get('name'),company:fd.get('company')||null,email:fd.get('email')||null,phone:fd.get('phone')||null});setModal('');load()}
+...async function logout(){await s.auth.signOut();r.push('/login')}
+async function syncPriceGuide(){
+  if(!confirm('Sync the Product Catalog with the Google Price Guide?'))return;
+
+  const {data:{session}}=await s.auth.getSession();
+
+  if(!session?.access_token){
+    alert('Your login session has expired. Please log in again.');
+    return;
+  }
+
+  try{
+    const response=await fetch('/api/sync-price-guide',{
+      method:'POST',
+      headers:{
+        Authorization:`Bearer ${session.access_token}`
+      }
+    });
+
+    const result=await response.json();
+
+    if(!response.ok){
+      alert(result.error||result.details||'Price Guide sync failed.');
+      return;
+    }
+
+    await load();
+
+    alert(
+      `Price Guide sync complete!\n\n`+
+      `Added: ${result.added}\n`+
+      `Updated: ${result.updated}\n`+
+      `Skipped: ${result.skipped}`+
+      (result.errors?.length?`\n\nErrors: ${result.errors.length}`:'')
+    );
+  }catch(error){
+    console.error(error);
+    alert('Price Guide sync failed. Please try again.');
+  }
+}
+}
+
+async function createCustomer(fd:FormData){
+  ...
+}
+                                                          async function createCustomer(fd:FormData){await s.from('customers').insert({name:fd.get('name'),company:fd.get('company')||null,email:fd.get('email')||null,phone:fd.get('phone')||null});setModal('');load()}
 async function createOrder(fd:FormData){let customer=String(fd.get('customer_id')),tax=Number(fd.get('tax_rate')||0),reference=String(fd.get('reference_number')||'').trim();let {data}=await s.from('orders').insert({customer_id:customer,reference_number:reference||null,tax_rate:tax,status:'Draft',payment_status:'Not Invoiced'}).select('*,customers(*),order_items(*),payments(*),order_notes(*)').single();setModal('');await load();if(data){setSelected(data as any);setTab('Order')}}
 async function addProduct(pid:string){if(!selected)return;let p=products.find(x=>x.id===pid);if(!p)return;await s.from('order_items').insert({order_id:selected.id,product_id:p.id,item_type:'Product',description:p.name,sku:p.sku,vendor:p.vendor,qty:1,sell_price:p.sell_price,cost:p.cost,purchasing_status:'Need to Order'});await refreshOrder()}
 async function addOther(fd:FormData){if(!selected)return;let type=String(fd.get('item_type')),sell=Number(fd.get('sell_price')||0);if(type==='Discount'&&sell>0)sell=-sell;await s.from('order_items').insert({order_id:selected.id,item_type:type,description:fd.get('description'),qty:Number(fd.get('qty')||1),sell_price:sell,cost:fd.get('cost')?Number(fd.get('cost')):null,purchasing_status:'N/A'});setModal('');refreshOrder()}
@@ -20,7 +65,13 @@ let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].som
 return <div className="shell"><aside className="side"><img className="logo" src="/flatout-logo.svg"/><div className="nav">{['Dashboard','Customers','Products','Orders','Purchasing','Purchase Orders'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>{setTab(x);setSelected(null);setSelectedPO(null)}}>{x}</button>)}</div></aside><main className="main"><div className="top"><div><b>{selected?(tab==='Invoice'?`${selected.order_number} — Invoice`:selected.order_number):selectedPO&&tab==='Purchase Order'?`${selectedPO.po_number} — Purchase Order`:tab}</b><div className="muted">Flatout Sim Racing ERP</div></div><div className="row"><span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
 {tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{orders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div><div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Sell</th><th>Margin</th></tr></thead><tbody>{orders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td>{o.order_number}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${t.sell.toLocaleString()}</td><td>{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
 {tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}><td><b>{c.name}</b></td><td>{c.company}</td><td>{c.email}</td><td>{c.phone}</td></tr>)}</tbody></table></div></>}
-{tab==='Products'&&<><div className="row"><b>Product catalog</b><span className="muted">Price Guide sync will update this catalog; historical orders remain unchanged.</span></div><div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
+{tab==='Products'&&<><div className="row" style={{justifyContent:'space-between'}}>
+  <div className="row">
+    <b>Product catalog</b>
+    <span className="muted">Price Guide sync will update this catalog; historical orders remain unchanged.</span>
+  </div>
+  <button className="btn" onClick={syncPriceGuide}>Sync Price Guide</button>
+</div><div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
 {tab==='Orders'&&<><button className="btn" onClick={()=>setModal('order')}>+ New Order</button><div className="panel"><table><thead><tr><th>Order</th><th>Reference #</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead><tbody>{orders.map(o=><tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td><b>{o.order_number}</b></td><td>{o.reference_number||'—'}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${totals(o).sell.toLocaleString()}</td></tr>)}</tbody></table></div></>}
 {tab==='Purchasing'&&<PurchasingView orders={orders} updateItem={updateItem} createPurchaseOrder={createPurchaseOrder} openOrder={(o:any)=>{setSelected(o);setSelectedPO(null);setTab('Order')}}/>}
 {tab==='Purchase Orders'&&<PurchaseOrdersView purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setSelected(null);setTab('Purchase Order')}}/>}
