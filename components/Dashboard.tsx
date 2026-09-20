@@ -107,6 +107,21 @@ await load();
 }async function updateEmployee(fd:FormData){
   if(!editingEmployee)return;
 
+  if(editingEmployee.user_id){
+    const {data:{user}}=await s.auth.getUser();
+
+    if(user?.id===editingEmployee.user_id){
+      const newRole=String(fd.get('role')||'Employee');
+      const newAccess=fd.get('erp_access')==='true';
+      const newActive=fd.get('active')==='true';
+
+      if(newRole!=='Admin'||!newAccess||!newActive){
+        alert('You cannot remove Admin access, turn off ERP access, or mark your own account inactive.');
+        return;
+      }
+    }
+  }
+    
   const {error}=await s
     .from('employees')
     .update({
@@ -114,8 +129,10 @@ await load();
       job_title:String(fd.get('job_title')||'').trim()||null,
       email:String(fd.get('email')||'').trim()||null,
       phone:String(fd.get('phone')||'').trim()||null,
-      role:String(fd.get('role')||'Employee'),
-      notes:String(fd.get('notes')||'').trim()||null,
+role:String(fd.get('role')||'Employee'),
+erp_access:fd.get('erp_access')==='true',
+active:fd.get('active')==='true',
+notes:String(fd.get('notes')||'').trim()||null,
       updated_at:new Date().toISOString()
     })
     .eq('id',editingEmployee.id);
@@ -287,20 +304,20 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     </div>
 
     <div className="field">
-      <label>Role</label>
-      <select name="role" defaultValue={editingEmployee.role}>
-        <option value="Admin">Admin</option>
-        <option value="Manager">Manager</option>
-        <option value="Employee">Employee</option>
-        <option value="Technician">Technician</option>
-      </select>
-    </div>
-  </div>
+  <label>ERP Access</label>
+  <select name="erp_access" defaultValue={editingEmployee.erp_access?'true':'false'}>
+    <option value="true">On</option>
+    <option value="false">Off</option>
+  </select>
+</div>
 
-  <div className="field">
-    <label>Notes</label>
-    <textarea name="notes" rows={4} defaultValue={editingEmployee.notes||''}/>
-  </div>
+<div className="field">
+  <label>Employment Status</label>
+  <select name="active" defaultValue={editingEmployee.active?'true':'false'}>
+    <option value="true">Active</option>
+    <option value="false">Inactive</option>
+  </select>
+</div>
 
   <div className="row">
     <button className="btn">Save Employee</button>
