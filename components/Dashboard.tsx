@@ -104,7 +104,31 @@ async function createCustomer(fd:FormData){await s.from('customers').insert({nam
  setModal('');
 setEditingCustomer(null);
 await load();
-}                                                        
+}async function updateEmployee(fd:FormData){
+  if(!editingEmployee)return;
+
+  const {error}=await s
+    .from('employees')
+    .update({
+      name:String(fd.get('name')||'').trim(),
+      job_title:String(fd.get('job_title')||'').trim()||null,
+      email:String(fd.get('email')||'').trim()||null,
+      phone:String(fd.get('phone')||'').trim()||null,
+      role:String(fd.get('role')||'Employee'),
+      notes:String(fd.get('notes')||'').trim()||null,
+      updated_at:new Date().toISOString()
+    })
+    .eq('id',editingEmployee.id);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  setEditingEmployee(null);
+  setModal('');
+  await load();
+}                                                       
 async function createOrder(fd:FormData){let customer=String(fd.get('customer_id')),tax=Number(fd.get('tax_rate')||0),reference=String(fd.get('reference_number')||'').trim();let {data}=await s.from('orders').insert({customer_id:customer,reference_number:reference||null,tax_rate:tax,status:'Draft',payment_status:'Not Invoiced'}).select('*,customers(*),order_items(*),payments(*),order_notes(*)').single();setModal('');await load();if(data){setSelected(data as any);setTab('Order')}}
 async function addProduct(pid:string){if(!selected)return;let p=products.find(x=>x.id===pid);if(!p)return;await s.from('order_items').insert({order_id:selected.id,product_id:p.id,item_type:'Product',description:p.name,sku:p.sku,vendor:p.vendor,qty:1,sell_price:p.sell_price,cost:p.cost,purchasing_status:'Need to Order'});await refreshOrder()}
 async function addOther(fd:FormData){if(!selected)return;let type=String(fd.get('item_type')),sell=Number(fd.get('sell_price')||0);if(type==='Discount'&&sell>0)sell=-sell;await s.from('order_items').insert({order_id:selected.id,item_type:type,description:fd.get('description'),qty:Number(fd.get('qty')||1),sell_price:sell,cost:fd.get('cost')?Number(fd.get('cost')):null,purchasing_status:'N/A'});setModal('');refreshOrder()}
@@ -238,7 +262,7 @@ return <div className="shell"><aside className="side"><img className="logo" src=
       Cancel
     </button>
   </div>
-</form>}{editingEmployee&&<form onSubmit={e=>e.preventDefault()}>
+</form>}{editingEmployee&&<form action={updateEmployee}>
   <h2>Edit Employee</h2>
 
   <div className="grid">
