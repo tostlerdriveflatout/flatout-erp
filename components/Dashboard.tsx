@@ -104,6 +104,28 @@ async function createCustomer(fd:FormData){await s.from('customers').insert({nam
  setModal('');
 setEditingCustomer(null);
 await load();
+}
+async function createEmployee(fd:FormData){
+  const {error}=await s
+    .from('employees')
+    .insert({
+      name:String(fd.get('name')||'').trim(),
+      job_title:String(fd.get('job_title')||'').trim()||null,
+      email:String(fd.get('email')||'').trim()||null,
+      phone:String(fd.get('phone')||'').trim()||null,
+      role:String(fd.get('role')||'Employee'),
+      erp_access:false,
+      active:true,
+      notes:String(fd.get('notes')||'').trim()||null
+    });
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  setModal('');
+  await load();
 }async function updateEmployee(fd:FormData){
   if(!editingEmployee)return;
 
@@ -226,7 +248,61 @@ return <div className="shell"><aside className="side"><img className="logo" src=
 {tab==='Purchase Order'&&selectedPO&&<PurchaseOrderView po={selectedPO} back={()=>{setSelectedPO(null);setTab('Purchase Orders')}}/>}
 {tab==='Order'&&selected&&<OrderView o={selected} products={products} totals={totals(selected)} addProduct={addProduct} addOther={()=>setModal('other')} openInvoice={openInvoice} dup={dup} del={del} updateItem={updateItem} updateShippingAddress={updateShippingAddress} updateReferenceNumber={updateReferenceNumber} updateOrderStatus={updateOrderStatus} createPurchaseOrder={createPurchaseOrder} purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setTab('Purchase Order')}} addOrderNote={addOrderNote}/>}
 {tab==='Invoice'&&selected&&<InvoiceView o={selected} totals={totals(selected)} back={()=>setTab('Order')} addPayment={()=>setModal('payment')}/>} </div></main>
-{modal&&<div className="modalbg" onMouseDown={()=>setModal('')}><div className="modal" onMouseDown={e=>e.stopPropagation()}>{modal==='customer'&&<form action={createCustomer}><h2>New Customer</h2><div className="grid">{['name','company','email','phone'].map(n=><div className="field" key={n}><label>{n}</label><input name={n} required={n==='name'}/></div>)}</div><button className="btn">Create Customer</button></form>} {modal==='editCustomer'&&editingCustomer&&
+{modal&&<div className="modalbg" onMouseDown={()=>setModal('')}><div className="modal" onMouseDown={e=>e.stopPropagation()}>{modal==='employee-new'&&<form action={createEmployee}>
+  <h2>New Employee</h2>
+
+  <div className="grid">
+    <div className="field">
+      <label>Name</label>
+      <input name="name" required/>
+    </div>
+
+    <div className="field">
+      <label>Job Title</label>
+      <input name="job_title"/>
+    </div>
+
+    <div className="field">
+      <label>Email</label>
+      <input name="email" type="email"/>
+    </div>
+
+    <div className="field">
+      <label>Phone</label>
+      <input name="phone"/>
+    </div>
+
+    <div className="field">
+      <label>Role</label>
+      <select name="role" defaultValue="Employee">
+        <option value="Admin">Admin</option>
+        <option value="Manager">Manager</option>
+        <option value="Employee">Employee</option>
+        <option value="Technician">Technician</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="field">
+    <label>Notes</label>
+    <textarea name="notes" rows={4}/>
+  </div>
+
+  <div className="muted" style={{marginBottom:12}}>
+    New employees are created as Active with ERP Access Off.
+  </div>
+
+  <div className="row">
+    <button className="btn">Create Employee</button>
+    <button
+      type="button"
+      className="btn secondary"
+      onClick={()=>setModal('')}
+    >
+      Cancel
+    </button>
+  </div>
+</form>}{modal==='customer'&&<form action={createCustomer}><h2>New Customer</h2><div className="grid">{['name','company','email','phone'].map(n=><div className="field" key={n}><label>{n}</label><input name={n} required={n==='name'}/></div>)}</div><button className="btn">Create Customer</button></form>} {modal==='editCustomer'&&editingCustomer&&
 <form action={updateCustomer}>
   <h2>Edit Customer</h2>
 
