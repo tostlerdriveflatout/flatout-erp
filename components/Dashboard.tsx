@@ -304,6 +304,15 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     </div>
 
     <div className="field">
+  <label>Role</label>
+  <select name="role" defaultValue={editingEmployee.role}>
+    <option value="Admin">Admin</option>
+    <option value="Manager">Manager</option>
+    <option value="Employee">Employee</option>
+    <option value="Technician">Technician</option>
+  </select>
+</div>
+    <div className="field">
   <label>ERP Access</label>
   <select name="erp_access" defaultValue={editingEmployee.erp_access?'true':'false'}>
     <option value="true">On</option>
@@ -318,6 +327,8 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     <option value="false">Inactive</option>
   </select>
 </div>
+
+    </div>
 
   <div className="row">
     <button className="btn">Save Employee</button>
