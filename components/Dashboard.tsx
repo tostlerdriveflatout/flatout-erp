@@ -146,7 +146,7 @@ return <div className="shell"><aside className="side"><img className="logo" src=
           <td>{e.role}</td>
           <td>{e.erp_access?'On':'Off'}</td>
           <td>{e.active?'Active':'Inactive'}</td>
-<td><button className="btn secondary" onClick={()=>setEditingEmployee(e)}>Edit</button></td>
+<td><button className="btn secondary" onClick={()=>{setEditingEmployee(e);setModal('employee')}}>Edit</button></td>
         </tr>)}
       </tbody>
     </table>
