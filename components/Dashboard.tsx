@@ -1,5 +1,5 @@
 'use client';import {useEffect,useMemo,useState} from 'react';import {supabase} from '@/lib/supabase-browser';import {useRouter} from 'next/navigation';
-type type Customer={
+type Customer={
   id:string,
   name:string,
   company:string|null,
