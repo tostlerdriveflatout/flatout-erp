@@ -135,6 +135,7 @@ return <div className="shell"><aside className="side"><img className="logo" src=
           <th>Role</th>
           <th>ERP Access</th>
           <th>Status</th>
+<th></th>
         </tr>
       </thead>
       <tbody>
@@ -145,6 +146,7 @@ return <div className="shell"><aside className="side"><img className="logo" src=
           <td>{e.role}</td>
           <td>{e.erp_access?'On':'Off'}</td>
           <td>{e.active?'Active':'Inactive'}</td>
+<td><button className="btn secondary">Edit</button></td>
         </tr>)}
       </tbody>
     </table>
