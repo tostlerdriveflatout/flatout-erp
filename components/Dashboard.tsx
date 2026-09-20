@@ -238,7 +238,58 @@ return <div className="shell"><aside className="side"><img className="logo" src=
       Cancel
     </button>
   </div>
-</form>}{modal==='order'&&<form action={createOrder}><h2>New Order</h2><div className="grid"><div className="field"><label>Customer</label><input list="cust" placeholder="Type to search" onChange={e=>{let c=customers.find(x=>x.name===e.target.value);let h=document.getElementById('cid') as HTMLInputElement;if(h)h.value=c?.id||''}}/><datalist id="cust">{customers.map(c=><option key={c.id} value={c.name}>{c.company||c.email}</option>)}</datalist><input id="cid" name="customer_id" type="hidden" required/></div><div className="field"><label>Reference #</label><input name="reference_number" placeholder="e.g. PO Mansell"/></div><div className="field"><label>Tax Rate %</label><input name="tax_rate" type="number" step=".01" defaultValue="7.45"/></div></div><p className="muted">Total is calculated from order items.</p><button className="btn">Create Order</button></form>}{modal==='other'&&<form action={addOther}><h2>Add Labor / Other</h2><div className="grid"><div className="field"><label>Type</label><select name="item_type"><option>Labor/Service</option><option>Shipping</option><option>Miscellaneous</option><option>Discount</option></select></div><div className="field"><label>Description</label><input name="description" required/></div><div className="field"><label>Qty</label><input name="qty" type="number" defaultValue="1"/></div><div className="field"><label>Sell Price</label><input name="sell_price" type="number" step=".01" required/></div><div className="field"><label>Internal Cost</label><input name="cost" type="number" step=".01" placeholder="Optional"/></div></div><button className="btn">Add Item</button></form>}{modal==='payment'&&selected&&<form action={addPayment}><h2>Record Payment</h2><div className="grid"><div className="field"><label>Amount</label><input name="amount" type="number" step=".01" min="0.01" required/></div><div className="field"><label>Payment Method</label><select name="payment_method"><option>Credit Card</option><option>ACH</option><option>Wire</option><option>Check</option><option>Cash</option><option>Other</option></select></div><div className="field"><label>Reference / Confirmation</label><input name="reference"/></div></div><div className="field"><label>Notes</label><input name="notes"/></div><button className="btn">Record Payment</button></form>}</div></div>}</div>}
+</form>}{editingEmployee&&<form onSubmit={e=>e.preventDefault()}>
+  <h2>Edit Employee</h2>
+
+  <div className="grid">
+    <div className="field">
+      <label>Name</label>
+      <input name="name" defaultValue={editingEmployee.name} required/>
+    </div>
+
+    <div className="field">
+      <label>Job Title</label>
+      <input name="job_title" defaultValue={editingEmployee.job_title||''}/>
+    </div>
+
+    <div className="field">
+      <label>Email</label>
+      <input name="email" type="email" defaultValue={editingEmployee.email||''}/>
+    </div>
+
+    <div className="field">
+      <label>Phone</label>
+      <input name="phone" defaultValue={editingEmployee.phone||''}/>
+    </div>
+
+    <div className="field">
+      <label>Role</label>
+      <select name="role" defaultValue={editingEmployee.role}>
+        <option value="Admin">Admin</option>
+        <option value="Manager">Manager</option>
+        <option value="Employee">Employee</option>
+        <option value="Technician">Technician</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="field">
+    <label>Notes</label>
+    <textarea name="notes" rows={4} defaultValue={editingEmployee.notes||''}/>
+  </div>
+
+  <div className="row">
+    <button className="btn">Save Employee</button>
+    <button
+      type="button"
+      className="btn secondary"
+      onClick={()=>setEditingEmployee(null)}
+    >
+      Cancel
+    </button>
+  </div>
+</form>}
+{modal==='order'&&<form action={createOrder}><h2>New Order</h2><div className="grid"><div className="field"><label>Customer</label><input list="cust" placeholder="Type to search" onChange={e=>{let c=customers.find(x=>x.name===e.target.value);let h=document.getElementById('cid') as HTMLInputElement;if(h)h.value=c?.id||''}}/><datalist id="cust">{customers.map(c=><option key={c.id} value={c.name}>{c.company||c.email}</option>)}</datalist><input id="cid" name="customer_id" type="hidden" required/></div><div className="field"><label>Reference #</label><input name="reference_number" placeholder="e.g. PO Mansell"/></div><div className="field"><label>Tax Rate %</label><input name="tax_rate" type="number" step=".01" defaultValue="7.45"/></div></div><p className="muted">Total is calculated from order items.</p><button className="btn">Create Order</button></form>}{modal==='other'&&<form action={addOther}><h2>Add Labor / Other</h2><div className="grid"><div className="field"><label>Type</label><select name="item_type"><option>Labor/Service</option><option>Shipping</option><option>Miscellaneous</option><option>Discount</option></select></div><div className="field"><label>Description</label><input name="description" required/></div><div className="field"><label>Qty</label><input name="qty" type="number" defaultValue="1"/></div><div className="field"><label>Sell Price</label><input name="sell_price" type="number" step=".01" required/></div><div className="field"><label>Internal Cost</label><input name="cost" type="number" step=".01" placeholder="Optional"/></div></div><button className="btn">Add Item</button></form>}{modal==='payment'&&selected&&<form action={addPayment}><h2>Record Payment</h2><div className="grid"><div className="field"><label>Amount</label><input name="amount" type="number" step=".01" min="0.01" required/></div><div className="field"><label>Payment Method</label><select name="payment_method"><option>Credit Card</option><option>ACH</option><option>Wire</option><option>Check</option><option>Cash</option><option>Other</option></select></div><div className="field"><label>Reference / Confirmation</label><input name="reference"/></div></div><div className="field"><label>Notes</label><input name="notes"/></div><button className="btn">Record Payment</button></form>}</div></div>}</div>}
 function PurchasingView({orders,updateItem,createPurchaseOrder,openOrder}:any){const [showReceived,setShowReceived]=useState(false),[search,setSearch]=useState(''),[selectedIds,setSelectedIds]=useState<string[]>([]);const rows=orders.flatMap((o:any)=>(o.order_items||[]).filter((i:any)=>i.item_type==='Product').map((i:any)=>({item:i,order:o}))).filter((x:any)=>showReceived||x.item.purchasing_status!=='Received').filter((x:any)=>{const q=search.trim().toLowerCase();return !q||[x.order.order_number,x.order.reference_number,x.order.customers?.name,x.item.description,x.item.sku,x.item.vendor,x.item.purchasing_status,x.item.tracking].some((v:any)=>(v||'').toLowerCase().includes(q))});const counts=['Need to Order','Ordered','Backordered','Shipped','Received'].map(st=>({st,n:orders.flatMap((o:any)=>o.order_items||[]).filter((i:any)=>i.item_type==='Product'&&i.purchasing_status===st).length}));const chosen=rows.filter((x:any)=>selectedIds.includes(x.item.id));const canPO=chosen.length>0&&chosen.every((x:any)=>x.order.id===chosen[0].order.id&&x.item.vendor===chosen[0].item.vendor)&&!!chosen[0].order.reference_number;function toggle(x:any,checked:boolean){if(checked&&selectedIds.length){const first=rows.find((r:any)=>r.item.id===selectedIds[0]);if(first&&(first.order.id!==x.order.id||first.item.vendor!==x.item.vendor)){alert('Select items from the same Sales Order and vendor for one PO.');return}}setSelectedIds(v=>checked?[...new Set([...v,x.item.id])]:v.filter(id=>id!==x.item.id))}return <><div className="row" style={{justifyContent:'space-between',marginBottom:18}}><div><h1>Parts Purchasing</h1><div className="muted">Company-wide purchasing overview. Open an order to manage purchasing for one customer.</div></div><div className="row"><input placeholder="Search order, customer, part, SKU or vendor" value={search} onChange={e=>setSearch(e.target.value)} style={{width:360}}/><label className="row" style={{gap:7}}><input type="checkbox" checked={showReceived} onChange={e=>setShowReceived(e.target.checked)}/> Show Received</label></div></div><div className="cards">{counts.map(x=><div className="card" key={x.st}><div className="muted">{x.st}</div><div className="value">{x.n}</div></div>)}</div>{selectedIds.length>0&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><b>{selectedIds.length} item{selectedIds.length===1?'':'s'} selected</b>{chosen[0]&&<div className="muted">{chosen[0].item.vendor} • {chosen[0].order.reference_number||'Reference # required'}</div>}</div><div className="row"><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(chosen[0].order,chosen.map((x:any)=>x.item));setSelectedIds([])}}>Create PO</button></div></div></div>}<div className="panel"><table><thead><tr><th></th><th>Order / Customer</th><th>Part</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Tracking</th></tr></thead><tbody>{rows.map(({item:i,order:o}:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>toggle({item:i,order:o},e.target.checked)}/></td><td><button className="btn ghost" onClick={()=>openOrder(o)}>{o.order_number}</button>{o.reference_number&&<div><b>{o.reference_number}</b></div>}<div className="muted">{o.customers?.name||'—'}</div></td><td><b>{i.description}</b>{i.sku&&<div className="muted">SKU: {i.sku}</div>}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><td><input key={`${i.id}-${i.tracking||''}`} defaultValue={i.tracking||''} placeholder="Tracking #" onBlur={e=>{if(e.target.value!==(i.tracking||''))updateItem(i,'tracking',e.target.value||null)}} style={{minWidth:150}}/></td></tr>)}{rows.length===0&&<tr><td colSpan={7} className="muted">No purchasing items match this view.</td></tr>}</tbody></table></div></>}
 
 function PurchaseOrdersView({purchaseOrders,openPO}:any){return <><div style={{marginBottom:18}}><h1>Purchase Orders</h1><div className="muted">Vendor POs created from Parts Purchasing.</div></div><div className="panel"><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Sales Order</th><th>Customer</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{purchaseOrders.map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{po.orders?.order_number||'—'}</td><td>{po.orders?.customers?.name||'—'}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{purchaseOrders.length===0&&<tr><td colSpan={7} className="muted">No purchase orders yet.</td></tr>}</tbody></table></div></>}
