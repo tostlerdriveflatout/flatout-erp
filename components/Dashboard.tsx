@@ -126,7 +126,52 @@ async function createEmployee(fd:FormData){
 
   setModal('');
   await load();
-}async function updateEmployee(fd:FormData){
+}
+                                                          async function inviteEmployee(employee:Employee){
+  if(!employee.email){
+    alert('This employee needs an email address before they can be invited.');
+    return;
+  }
+
+  if(!employee.active){
+    alert('Inactive employees cannot be invited.');
+    return;
+  }
+
+  if(employee.user_id){
+    alert('This employee already has an ERP login.');
+    return;
+  }
+
+  const {data:{session}}=await s.auth.getSession();
+
+  if(!session){
+    alert('Your login session has expired. Please log in again.');
+    return;
+  }
+
+  const response=await fetch('/api/invite-employee',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${session.access_token}`
+    },
+    body:JSON.stringify({
+      employeeId:employee.id
+    })
+  });
+
+  const result=await response.json();
+
+  if(!response.ok){
+    alert(result.error||'Unable to invite employee.');
+    return;
+  }
+
+  alert(result.message||'Employee invitation sent.');
+  await load();
+}
+                                                          async function updateEmployee(fd:FormData){
   if(!editingEmployee)return;
 
   if(editingEmployee.user_id){
@@ -212,7 +257,25 @@ return <div className="shell"><aside className="side"><img className="logo" src=
           <td>{e.role}</td>
           <td>{e.erp_access?'On':'Off'}</td>
           <td>{e.active?'Active':'Inactive'}</td>
-<td><button className="btn secondary" onClick={()=>{setEditingEmployee(e);setModal('employee')}}>Edit</button></td>
+<td>
+  <div className="row">
+    <button
+      className="btn secondary"
+      onClick={()=>{setEditingEmployee(e);setModal('employee')}}
+    >
+      Edit
+    </button>
+
+    {!e.user_id && e.active && (
+      <button
+        className="btn"
+        onClick={()=>inviteEmployee(e)}
+      >
+        Invite to ERP
+      </button>
+    )}
+  </div>
+</td>
         </tr>)}
       </tbody>
     </table>
