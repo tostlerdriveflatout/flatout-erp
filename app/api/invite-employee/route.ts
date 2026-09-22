@@ -90,8 +90,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: inviteData, error: inviteError } =
-      await adminClient.auth.admin.inviteUserByEmail(employeeToInvite.email)
+ const { data: inviteData, error: inviteError } =
+  await adminClient.auth.admin.inviteUserByEmail(
+    employeeToInvite.email,
+    {
+      redirectTo: 'https://flatout-erp.vercel.app/set-password'
+    }
+  )
 
     if (inviteError) {
       return Response.json({ error: inviteError.message }, { status: 400 })
