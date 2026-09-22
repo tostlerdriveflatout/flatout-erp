@@ -16,38 +16,81 @@ export default function SetPasswordPage() {
 
   useEffect(() => {
     async function establishSession() {
-      // Supabase may return the invite with an authorization code.
-      const params = new URLSearchParams(window.location.search)
-      const code = params.get('code')
+      try {
+        // Supabase invitation links currently return the session
+        // in the URL hash:
+        // #access_token=...&refresh_token=...&type=invite
+        const hashParams = new URLSearchParams(
+          window.location.hash.substring(1)
+        )
 
-      if (code) {
-        const { error } = await s.auth.exchangeCodeForSession(code)
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
 
-        if (error) {
-          setMessage(`Unable to verify invitation: ${error.message}`)
+        if (accessToken && refreshToken) {
+          const { error } = await s.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
+
+          if (error) {
+            setMessage(
+              `Unable to verify invitation: ${error.message}`
+            )
+            return
+          }
+
+          // Remove the tokens from the browser address bar.
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname
+          )
+        } else {
+          // Also support PKCE/code-based redirects if we use them later.
+          const searchParams = new URLSearchParams(
+            window.location.search
+          )
+
+          const code = searchParams.get('code')
+
+          if (code) {
+            const { error } =
+              await s.auth.exchangeCodeForSession(code)
+
+            if (error) {
+              setMessage(
+                `Unable to verify invitation: ${error.message}`
+              )
+              return
+            }
+
+            window.history.replaceState(
+              {},
+              document.title,
+              window.location.pathname
+            )
+          }
+        }
+
+        const {
+          data: { session },
+          error: sessionError
+        } = await s.auth.getSession()
+
+        if (sessionError || !session) {
+          setMessage(
+            'Your invitation session could not be verified. Please use a fresh invitation link.'
+          )
           return
         }
 
-        // Remove the one-time code from the visible URL.
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname
-        )
-      }
-
-      const {
-        data: { session }
-      } = await s.auth.getSession()
-
-      if (!session) {
+        setReady(true)
+      } catch (error: any) {
         setMessage(
-          'Your invitation session could not be verified. Please use the link in your invitation email again.'
+          error?.message || 'Unable to verify invitation.'
         )
-        return
       }
-
-      setReady(true)
     }
 
     establishSession()
@@ -59,7 +102,7 @@ export default function SetPasswordPage() {
 
     if (!ready) {
       setMessage(
-        'Your invitation is still being verified. Please wait a moment and try again.'
+        'Your invitation is still being verified. Please wait a moment.'
       )
       return
     }
@@ -87,7 +130,9 @@ export default function SetPasswordPage() {
       return
     }
 
-    setMessage('Password created successfully. Opening Flatout ERP...')
+    setMessage(
+      'Password created successfully. Opening Flatout ERP...'
+    )
 
     setTimeout(() => {
       router.push('/dashboard')
@@ -114,10 +159,13 @@ export default function SetPasswordPage() {
           color: '#fff'
         }}
       >
-        <h1 style={{ marginTop: 0 }}>Create Your Password</h1>
+        <h1 style={{ marginTop: 0 }}>
+          Create Your Password
+        </h1>
 
         <p style={{ color: '#aaa' }}>
-          Create a password for your Flatout Sim Racing ERP account.
+          Create a password for your Flatout Sim Racing ERP
+          account.
         </p>
 
         <form onSubmit={setNewPassword}>
