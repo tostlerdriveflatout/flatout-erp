@@ -38,7 +38,13 @@ export default function Dashboard({email}:{email:string}){const s=supabase(),r=u
   setProducts(p.data||[]);
   setOrders((o.data||[]) as any);
   setPurchaseOrders((po.data||[]) as any);
-}const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
+}
+                                                          
+useEffect(()=>{
+  load();
+},[]);
+      
+const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
 async function syncPriceGuide(){
   if(!confirm('Sync the Product Catalog with the Google Price Guide?'))return;
 
