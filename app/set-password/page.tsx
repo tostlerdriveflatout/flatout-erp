@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase-browser'
 
@@ -12,10 +12,57 @@ export default function SetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    async function establishSession() {
+      // Supabase may return the invite with an authorization code.
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+
+      if (code) {
+        const { error } = await s.auth.exchangeCodeForSession(code)
+
+        if (error) {
+          setMessage(`Unable to verify invitation: ${error.message}`)
+          return
+        }
+
+        // Remove the one-time code from the visible URL.
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname
+        )
+      }
+
+      const {
+        data: { session }
+      } = await s.auth.getSession()
+
+      if (!session) {
+        setMessage(
+          'Your invitation session could not be verified. Please use the link in your invitation email again.'
+        )
+        return
+      }
+
+      setReady(true)
+    }
+
+    establishSession()
+  }, [])
 
   async function setNewPassword(e: React.FormEvent) {
     e.preventDefault()
     setMessage('')
+
+    if (!ready) {
+      setMessage(
+        'Your invitation is still being verified. Please wait a moment and try again.'
+      )
+      return
+    }
 
     if (password.length < 8) {
       setMessage('Password must be at least 8 characters.')
@@ -40,7 +87,7 @@ export default function SetPasswordPage() {
       return
     }
 
-    setMessage('Password created successfully.')
+    setMessage('Password created successfully. Opening Flatout ERP...')
 
     setTimeout(() => {
       router.push('/dashboard')
@@ -48,21 +95,25 @@ export default function SetPasswordPage() {
   }
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#111'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: 420,
-        padding: 32,
-        background: '#1c1c1c',
-        borderRadius: 10,
-        color: '#fff'
-      }}>
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#111'
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 420,
+          padding: 32,
+          background: '#1c1c1c',
+          borderRadius: 10,
+          color: '#fff'
+        }}
+      >
         <h1 style={{ marginTop: 0 }}>Create Your Password</h1>
 
         <p style={{ color: '#aaa' }}>
@@ -77,6 +128,7 @@ export default function SetPasswordPage() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
+            disabled={!ready || saving}
             style={{
               width: '100%',
               padding: 12,
@@ -93,6 +145,7 @@ export default function SetPasswordPage() {
             value={confirmPassword}
             onChange={e => setConfirmPassword(e.target.value)}
             required
+            disabled={!ready || saving}
             style={{
               width: '100%',
               padding: 12,
@@ -104,7 +157,7 @@ export default function SetPasswordPage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={!ready || saving}
             style={{
               width: '100%',
               padding: 12,
@@ -112,11 +165,16 @@ export default function SetPasswordPage() {
               color: '#fff',
               border: 0,
               borderRadius: 5,
-              cursor: 'pointer',
-              fontWeight: 600
+              cursor: ready ? 'pointer' : 'not-allowed',
+              fontWeight: 600,
+              opacity: ready ? 1 : 0.6
             }}
           >
-            {saving ? 'Creating Password...' : 'Create Password'}
+            {!ready
+              ? 'Verifying Invitation...'
+              : saving
+                ? 'Creating Password...'
+                : 'Create Password'}
           </button>
         </form>
 
