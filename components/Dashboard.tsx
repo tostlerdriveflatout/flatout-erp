@@ -151,23 +151,39 @@ async function inviteEmployee(employee:Employee){
     return;
   }
 
-  // Existing account = send password reset
-  if(employee.user_id){
-    const {error}=await s.auth.resetPasswordForEmail(
-      employee.email,
-      {
-        redirectTo:'https://flatout-erp.vercel.app/set-password'
-      }
-    );
+// Existing account = generate secure password reset link
+if(employee.user_id){
+  const response=await fetch('/api/reset-employee-password',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${session.access_token}`
+    },
+    body:JSON.stringify({
+      employeeId:employee.id
+    })
+  });
 
-    if(error){
-      alert(error.message);
-      return;
-    }
+  const result=await response.json();
 
-    alert(`Password reset sent to ${employee.email}`);
+  if(!response.ok){
+    alert(result.error||'Unable to create password reset.');
     return;
   }
+
+  if(!result.actionLink){
+    alert('Password reset link was not returned.');
+    return;
+  }
+
+  await navigator.clipboard.writeText(result.actionLink);
+
+  alert(
+    `Password reset link created for ${employee.email} and copied to your clipboard.`
+  );
+
+  return;
+}
 
   // No account yet = send first ERP invitation
   const response=await fetch('/api/invite-employee',{
