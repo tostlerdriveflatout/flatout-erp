@@ -25,23 +25,58 @@ type Employee={
   updated_at:string
 };  type Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};type Order={id:string,order_number:string,status:string,payment_status:string,tax_rate:number,customer_id:string,shipping_address:string|null,reference_number:string|null,created_at?:string,customers?:Customer,order_items?:Item[],payments?:Payment[],order_notes?:OrderNote[]};type PurchaseOrderItem={id:string,purchase_order_id:string,order_item_id:string|null,description:string,sku:string|null,qty:number,unit_cost:number|null,sort_order:number};type PurchaseOrder={id:string,po_number:string,order_id:string,vendor:string,notes:string|null,status:string,created_at:string,purchase_order_items?:PurchaseOrderItem[],orders?:Order};type OrderNote={id:string,order_id:string,note:string,created_at:string,created_by:string|null};type Item={id:string,order_id:string,product_id:string|null,item_type:string,description:string,sku:string|null,vendor:string|null,qty:number,sell_price:number,cost:number|null,purchasing_status:string,tracking:string|null,notes:string|null};
 export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[editingCustomer,setEditingCustomer]=useState<Customer|null>(null),[editingEmployee,setEditingEmployee]=useState<Employee|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');async function load(){
-  let [c,e,p,o,po]=await Promise.all([
+async function load() {
+  // First verify the currently logged-in user's employee record.
+  const {
+    data: { user },
+    error: userError
+  } = await s.auth.getUser()
+
+  if (userError || !user) {
+    await s.auth.signOut()
+    r.push('/login')
+    return
+  }
+
+  const { data: currentEmployee, error: employeeError } =
+    await s
+      .from('employees')
+      .select('*')
+      .eq('user_id', user.id)
+      .single()
+
+  // Block anyone who is not an active employee with ERP Access enabled.
+  if (
+    employeeError ||
+    !currentEmployee ||
+    !currentEmployee.active ||
+    !currentEmployee.erp_access
+  ) {
+    await s.auth.signOut()
+    alert('Your ERP access is currently disabled.')
+    r.push('/login')
+    return
+  }
+
+  // User is authorized — now load the ERP data.
+  let [c, e, p, o, po] = await Promise.all([
     s.from('customers').select('*').order('name'),
     s.from('employees').select('*').order('name'),
-    s.from('products').select('*').eq('active',true).order('name'),
-    s.from('orders').select('*,customers(*),order_items(*),payments(*),order_notes(*)').order('created_at',{ascending:false}),
-    s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').order('created_at',{ascending:false})
-  ]);
+    s.from('products').select('*').eq('active', true).order('name'),
+    s.from('orders')
+      .select('*,customers(*),order_items(*),payments(*),order_notes(*)')
+      .order('created_at', { ascending: false }),
+    s.from('purchase_orders')
+      .select('*,purchase_order_items(*),orders(*,customers(*))')
+      .order('created_at', { ascending: false })
+  ])
 
-  setCustomers(c.data||[]);
-  setEmployees((e.data||[]) as Employee[]);
-  setProducts(p.data||[]);
-  setOrders((o.data||[]) as any);
-  setPurchaseOrders((po.data||[]) as any);
+  setCustomers((c.data || []) as Customer[])
+  setEmployees((e.data || []) as Employee[])
+  setProducts((p.data || []) as Product[])
+  setOrders((o.data || []) as any)
+  setPurchaseOrders((po.data || []) as any)
 }
-                                                          
-useEffect(()=>{
-  load();
 },[]);
       
 const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
