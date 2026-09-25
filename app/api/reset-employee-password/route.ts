@@ -141,10 +141,6 @@ return Response.json({
   message: `Password reset email sent to ${employeeToReset.email}`
 })
 
-    return Response.json({
-      success: true,
-      actionLink: data.properties.action_link
-    })
   } catch (error: any) {
     return Response.json(
       {
