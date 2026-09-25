@@ -188,7 +188,7 @@ async function inviteEmployee(employee:Employee){
   }
 
 // Existing account = generate secure password reset link
-if(employee.user_id){
+if(employee.user_id && employee.invite_status === 'active'){
   const response=await fetch('/api/reset-employee-password',{
     method:'POST',
     headers:{
@@ -538,7 +538,7 @@ return <div className="shell"><aside className="side"><img className="logo" src=
   >
     <div style={{marginBottom:10}}>
       <b>
-        {editingEmployee.user_id
+        {editingEmployee.user_id && editingEmployee.invite_status === 'active'
           ? 'ERP Account Created'
           : 'No ERP Account'}
       </b>
@@ -556,9 +556,9 @@ return <div className="shell"><aside className="side"><img className="logo" src=
         className="btn secondary"
         onClick={()=>inviteEmployee(editingEmployee)}
       >
-        {editingEmployee.user_id
-          ? 'Send Password Reset'
-          : 'Invite to ERP'}
+        {editingEmployee.user_id && editingEmployee.invite_status === 'pending'
+  ? 'Resend Invite'
+  : 'Invite to ERP'}
       </button>
     )}
   </div>
