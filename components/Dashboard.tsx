@@ -44,7 +44,9 @@ async function load() {
       .select('*')
       .eq('user_id', user.id)
       .single()
-
+alert(
+  `DEBUG: user=${user.id}\nemployee=${JSON.stringify(currentEmployee)}\nerror=${JSON.stringify(employeeError)}`
+)
   // Block anyone who is not an active employee with ERP Access enabled.
   if (
     employeeError ||
