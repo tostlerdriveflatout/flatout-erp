@@ -132,19 +132,31 @@ export default function SetPasswordPage() {
     }
 if (mode === 'invite') {
   const {
-    data: { user }
-  } = await s.auth.getUser()
+    data: { session }
+  } = await s.auth.getSession()
 
-  if (user) {
-    await s
-      .from('employees')
-      .update({
-        invite_status: 'active',
-        account_activated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', user.id)
+  if (!session) {
+    setMessage('Password created, but account activation could not be completed.')
+    return
   }
+
+  const activationResponse = await fetch('/api/activate-employee', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`
+    }
+  })
+
+  const activationResult = await activationResponse.json()
+
+  if (!activationResponse.ok) {
+    setMessage(
+      activationResult.error ||
+        'Password created, but account activation could not be completed.'
+    )
+    return
+  }
+}
 }
     setMessage(
       mode === 'recovery'
