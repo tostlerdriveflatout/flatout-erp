@@ -157,7 +157,6 @@ if (mode === 'invite') {
     return
   }
 }
-}
     setMessage(
       mode === 'recovery'
         ? 'Password reset successfully. Opening Flatout ERP...'
