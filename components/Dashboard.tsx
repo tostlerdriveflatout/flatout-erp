@@ -21,6 +21,8 @@ type Employee={
   active:boolean,
   job_title:string|null,
   notes:string|null,
+  invite_status:'pending'|'active'|null,
+account_activated_at:string|null,
   created_at:string,
   updated_at:string
 };  type Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};type Order={id:string,order_number:string,status:string,payment_status:string,tax_rate:number,customer_id:string,shipping_address:string|null,reference_number:string|null,created_at?:string,customers?:Customer,order_items?:Item[],payments?:Payment[],order_notes?:OrderNote[]};type PurchaseOrderItem={id:string,purchase_order_id:string,order_item_id:string|null,description:string,sku:string|null,qty:number,unit_cost:number|null,sort_order:number};type PurchaseOrder={id:string,po_number:string,order_id:string,vendor:string,notes:string|null,status:string,created_at:string,purchase_order_items?:PurchaseOrderItem[],orders?:Order};type OrderNote={id:string,order_id:string,note:string,created_at:string,created_by:string|null};type Item={id:string,order_id:string,product_id:string|null,item_type:string,description:string,sku:string|null,vendor:string|null,qty:number,sell_price:number,cost:number|null,purchasing_status:string,tracking:string|null,notes:string|null};
