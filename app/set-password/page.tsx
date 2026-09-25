@@ -13,19 +13,22 @@ export default function SetPasswordPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [ready, setReady] = useState(false)
+  const [mode, setMode] = useState<'invite' | 'recovery'>('invite')
 
   useEffect(() => {
     async function establishSession() {
       try {
-        // Supabase invitation links currently return the session
-        // in the URL hash:
-        // #access_token=...&refresh_token=...&type=invite
         const hashParams = new URLSearchParams(
           window.location.hash.substring(1)
         )
 
         const accessToken = hashParams.get('access_token')
         const refreshToken = hashParams.get('refresh_token')
+        const linkType = hashParams.get('type')
+
+        if (linkType === 'recovery') {
+          setMode('recovery')
+        }
 
         if (accessToken && refreshToken) {
           const { error } = await s.auth.setSession({
@@ -35,19 +38,17 @@ export default function SetPasswordPage() {
 
           if (error) {
             setMessage(
-              `Unable to verify invitation: ${error.message}`
+              `Unable to verify link: ${error.message}`
             )
             return
           }
 
-          // Remove the tokens from the browser address bar.
           window.history.replaceState(
             {},
             document.title,
             window.location.pathname
           )
         } else {
-          // Also support PKCE/code-based redirects if we use them later.
           const searchParams = new URLSearchParams(
             window.location.search
           )
@@ -60,7 +61,7 @@ export default function SetPasswordPage() {
 
             if (error) {
               setMessage(
-                `Unable to verify invitation: ${error.message}`
+                `Unable to verify link: ${error.message}`
               )
               return
             }
@@ -80,7 +81,7 @@ export default function SetPasswordPage() {
 
         if (sessionError || !session) {
           setMessage(
-            'Your invitation session could not be verified. Please use a fresh invitation link.'
+            'This password link could not be verified. Please request a new link.'
           )
           return
         }
@@ -88,7 +89,7 @@ export default function SetPasswordPage() {
         setReady(true)
       } catch (error: any) {
         setMessage(
-          error?.message || 'Unable to verify invitation.'
+          error?.message || 'Unable to verify password link.'
         )
       }
     }
@@ -102,7 +103,7 @@ export default function SetPasswordPage() {
 
     if (!ready) {
       setMessage(
-        'Your invitation is still being verified. Please wait a moment.'
+        'Your password link is still being verified. Please wait a moment.'
       )
       return
     }
@@ -131,7 +132,9 @@ export default function SetPasswordPage() {
     }
 
     setMessage(
-      'Password created successfully. Opening Flatout ERP...'
+      mode === 'recovery'
+        ? 'Password reset successfully. Opening Flatout ERP...'
+        : 'Password created successfully. Opening Flatout ERP...'
     )
 
     setTimeout(() => {
@@ -160,16 +163,23 @@ export default function SetPasswordPage() {
         }}
       >
         <h1 style={{ marginTop: 0 }}>
-          Create Your Password
+          {mode === 'recovery'
+            ? 'Reset Your Password'
+            : 'Create Your Password'}
         </h1>
 
         <p style={{ color: '#aaa' }}>
-          Create a password for your Flatout Sim Racing ERP
-          account.
+          {mode === 'recovery'
+            ? 'Choose a new password for your Flatout Sim Racing ERP account.'
+            : 'Create a password for your Flatout Sim Racing ERP account.'}
         </p>
 
         <form onSubmit={setNewPassword}>
-          <label>Password</label>
+          <label>
+            {mode === 'recovery'
+              ? 'New Password'
+              : 'Password'}
+          </label>
 
           <input
             type="password"
@@ -219,10 +229,12 @@ export default function SetPasswordPage() {
             }}
           >
             {!ready
-              ? 'Verifying Invitation...'
+              ? 'Verifying Link...'
               : saving
-                ? 'Creating Password...'
-                : 'Create Password'}
+                ? 'Saving Password...'
+                : mode === 'recovery'
+                  ? 'Reset Password'
+                  : 'Create Password'}
           </button>
         </form>
 
