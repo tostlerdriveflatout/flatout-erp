@@ -171,18 +171,12 @@ if(employee.user_id){
     return;
   }
 
-  if(!result.actionLink){
-    alert('Password reset link was not returned.');
-    return;
-  }
+alert(
+  result.message ||
+  `Password reset email sent to ${employee.email}.`
+);
 
-  await navigator.clipboard.writeText(result.actionLink);
-
-  alert(
-    `Password reset link created for ${employee.email} and copied to your clipboard.`
-  );
-
-  return;
+return;
 }
 
   // No account yet = send first ERP invitation
