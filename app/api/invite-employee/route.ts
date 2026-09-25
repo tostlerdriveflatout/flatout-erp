@@ -112,11 +112,14 @@ export async function POST(request: Request) {
     // Connect the Supabase Auth account to the employee record
     const { error: updateError } = await adminClient
       .from('employees')
-      .update({
-        user_id: inviteData.user.id,
-        erp_access: true,
-        updated_at: new Date().toISOString()
-      })
+.update({
+  user_id: inviteData.user.id,
+  erp_access: true,
+  invite_status: 'pending',
+  invited_at: new Date().toISOString(),
+  account_activated_at: null,
+  updated_at: new Date().toISOString()
+})
       .eq('id', employeeToInvite.id)
 
     if (updateError) {
