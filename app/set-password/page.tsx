@@ -130,7 +130,22 @@ export default function SetPasswordPage() {
       setMessage(error.message)
       return
     }
+if (mode === 'invite') {
+  const {
+    data: { user }
+  } = await s.auth.getUser()
 
+  if (user) {
+    await s
+      .from('employees')
+      .update({
+        invite_status: 'active',
+        account_activated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id)
+  }
+}
     setMessage(
       mode === 'recovery'
         ? 'Password reset successfully. Opening Flatout ERP...'
