@@ -117,30 +117,29 @@ export async function POST(request: Request) {
       )
     }
 
-    // Generate a recovery link server-side.
-    const { data, error: linkError } =
-      await adminClient.auth.admin.generateLink({
-        type: 'recovery',
-        email: employeeToReset.email,
-        options: {
-          redirectTo:
-            'https://flatout-erp.vercel.app/set-password'
-        }
-      })
-
-    if (linkError) {
-      return Response.json(
-        { error: linkError.message },
-        { status: 400 }
-      )
+// Send the password recovery email through Supabase Auth.
+// Supabase will use the configured Reset Password email template
+// and custom SMTP settings.
+const { error: resetError } =
+  await adminClient.auth.resetPasswordForEmail(
+    employeeToReset.email,
+    {
+      redirectTo:
+        'https://flatout-erp.vercel.app/set-password'
     }
+  )
 
-    if (!data?.properties?.action_link) {
-      return Response.json(
-        { error: 'Unable to generate password reset link' },
-        { status: 500 }
-      )
-    }
+if (resetError) {
+  return Response.json(
+    { error: resetError.message },
+    { status: 400 }
+  )
+}
+
+return Response.json({
+  success: true,
+  message: `Password reset email sent to ${employeeToReset.email}`
+})
 
     return Response.json({
       success: true,
