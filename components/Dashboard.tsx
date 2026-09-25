@@ -133,19 +133,14 @@ async function createEmployee(fd:FormData){
   setModal('');
   await load();
 }
-                                                          async function inviteEmployee(employee:Employee){
+async function inviteEmployee(employee:Employee){
   if(!employee.email){
-    alert('This employee needs an email address before they can be invited.');
+    alert('This employee needs an email address first.');
     return;
   }
 
   if(!employee.active){
-    alert('Inactive employees cannot be invited.');
-    return;
-  }
-
-  if(employee.user_id){
-    alert('This employee already has an ERP login.');
+    alert('Inactive employees cannot manage ERP login access.');
     return;
   }
 
@@ -156,6 +151,25 @@ async function createEmployee(fd:FormData){
     return;
   }
 
+  // Existing account = send password reset
+  if(employee.user_id){
+    const {error}=await s.auth.resetPasswordForEmail(
+      employee.email,
+      {
+        redirectTo:'https://flatout-erp.vercel.app/set-password'
+      }
+    );
+
+    if(error){
+      alert(error.message);
+      return;
+    }
+
+    alert(`Password reset sent to ${employee.email}`);
+    return;
+  }
+
+  // No account yet = send first ERP invitation
   const response=await fetch('/api/invite-employee',{
     method:'POST',
     headers:{
@@ -264,23 +278,14 @@ return <div className="shell"><aside className="side"><img className="logo" src=
           <td>{e.erp_access?'On':'Off'}</td>
           <td>{e.active?'Active':'Inactive'}</td>
 <td>
-  <div className="row">
-    <button
-      className="btn secondary"
-      onClick={()=>{setEditingEmployee(e);setModal('employee')}}
-    >
-      Edit
-    </button>
-
-    {!e.user_id && e.active && (
-      <button
-        className="btn"
-        onClick={()=>inviteEmployee(e)}
-      >
-        Invite to ERP
-      </button>
-    )}
-  </div>
+ <div className="row">
+  <button
+    className="btn secondary"
+    onClick={()=>{setEditingEmployee(e);setModal('employee')}}
+  >
+    Edit
+  </button>
+</div>
 </td>
         </tr>)}
       </tbody>
@@ -475,7 +480,43 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     <option value="false">Inactive</option>
   </select>
 </div>
+<div className="field" style={{gridColumn:'1 / -1'}}>
+  <label>ERP Login</label>
 
+  <div
+    style={{
+      border:'1px solid #dce0d9',
+      borderRadius:6,
+      padding:14
+    }}
+  >
+    <div style={{marginBottom:10}}>
+      <b>
+        {editingEmployee.user_id
+          ? 'ERP Account Created'
+          : 'No ERP Account'}
+      </b>
+
+      <div className="muted" style={{marginTop:4}}>
+        {editingEmployee.user_id
+          ? 'This employee has a login account connected to the ERP.'
+          : 'This employee does not have a login account yet.'}
+      </div>
+    </div>
+
+    {editingEmployee.active && (
+      <button
+        type="button"
+        className="btn secondary"
+        onClick={()=>inviteEmployee(editingEmployee)}
+      >
+        {editingEmployee.user_id
+          ? 'Send Password Reset'
+          : 'Invite to ERP'}
+      </button>
+    )}
+  </div>
+</div>
     </div>
 
   <div className="row">
