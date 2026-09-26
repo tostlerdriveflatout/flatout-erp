@@ -540,30 +540,36 @@ return <div className="shell"><aside className="side"><img className="logo" src=
   >
     <div style={{marginBottom:10}}>
       <b>
-        {editingEmployee.user_id && editingEmployee.invite_status === 'active'
-          ? 'ERP Account Created'
-          : 'No ERP Account'}
+        {editingEmployee.account_activated_at
+          ? 'ERP Account Active'
+          : editingEmployee.user_id
+            ? 'ERP Invitation Pending'
+            : 'No ERP Account'}
       </b>
 
       <div className="muted" style={{marginTop:4}}>
-        {editingEmployee.user_id
-          ? 'This employee has a login account connected to the ERP.'
-          : 'This employee does not have a login account yet.'}
+        {editingEmployee.account_activated_at
+          ? 'This employee has an active login account connected to the ERP.'
+          : editingEmployee.user_id
+            ? 'This employee has been invited but has not completed account setup yet.'
+            : 'This employee does not have a login account yet.'}
       </div>
     </div>
 
-    {editingEmployee.active && (
-      <button
-        type="button"
-        className="btn secondary"
-        onClick={()=>inviteEmployee(editingEmployee)}
-      >
-        {editingEmployee.user_id && editingEmployee.invite_status === 'pending'
-  ? 'Resend Invite'
-  : 'Invite to ERP'}
-      </button>
-    )}
+    {editingEmployee.active &&
+      !editingEmployee.account_activated_at && (
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={()=>inviteEmployee(editingEmployee)}
+        >
+          {editingEmployee.user_id
+            ? 'Resend Invite'
+            : 'Invite to ERP'}
+        </button>
+      )}
   </div>
+</div>
 </div>
     </div>
 
