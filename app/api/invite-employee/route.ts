@@ -115,14 +115,14 @@ export async function POST(request: Request) {
         )
       }
 
-      const { error: resendError } =
-        await adminClient.auth.resetPasswordForEmail(
-          employeeToInvite.email,
-          {
-            redirectTo:
-              'https://flatout-erp.vercel.app/set-password'
-          }
-        )
+     const { error: resendError } =
+  await adminClient.auth.resetPasswordForEmail(
+    employeeToInvite.email,
+    {
+      redirectTo:
+        'https://flatout-erp.vercel.app/set-password?pendingInvite=1'
+    }
+  )
 
       if (resendError) {
         return Response.json(
