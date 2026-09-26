@@ -44,25 +44,29 @@ export default function Login() {
 
     setSending(true)
 
-    const { error } = await supabase().auth.resetPasswordForEmail(
-      email.trim(),
-      {
-        redirectTo:
-          'https://flatout-erp.vercel.app/set-password'
-      }
-    )
+   const response = await fetch('/api/forgot-password', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    email: email.trim()
+  })
+})
 
-    setSending(false)
+const result = await response.json()
 
-    if (error) {
-      setErr(error.message)
-      return
-    }
+setSending(false)
 
-    setMessage(
-      'Password reset email sent. Check your inbox for a link to create a new password.'
-    )
-  }
+if (!response.ok) {
+  setErr('Unable to process password reset. Please try again.')
+  return
+}
+
+setMessage(
+  result.message ||
+    'If an ERP account exists for that email, a password reset link has been sent.'
+)
 
   return (
     <div className="login">
