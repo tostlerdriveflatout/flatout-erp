@@ -130,13 +130,18 @@ export default function SetPasswordPage() {
       setMessage(error.message)
       return
     }
-if (mode === 'invite') {
+const pendingInvite =
+  new URLSearchParams(window.location.search).get('pendingInvite') === '1'
+
+if (mode === 'invite' || pendingInvite) {
   const {
     data: { session }
   } = await s.auth.getSession()
 
   if (!session) {
-    setMessage('Password created, but account activation could not be completed.')
+    setMessage(
+      'Password created, but account activation could not be completed.'
+    )
     return
   }
 
