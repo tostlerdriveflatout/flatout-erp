@@ -570,6 +570,7 @@ return <div className="shell"><aside className="side"><img className="logo" src=
       )}
   </div>
 </div>
+    </div>
 
   <div className="row">
     <button className="btn">Save Employee</button>
