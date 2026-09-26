@@ -67,8 +67,9 @@ setMessage(
   result.message ||
     'If an ERP account exists for that email, a password reset link has been sent.'
 )
+}
 
-  return (
+return (
     <div className="login">
       <form
         className="loginbox"
