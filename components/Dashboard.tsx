@@ -49,6 +49,7 @@ type Build = {
 };
 export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[editingCustomer,setEditingCustomer]=useState<Customer|null>(null),[editingEmployee,setEditingEmployee]=useState<Employee|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');
 const [builds,setBuilds]=useState<Build[]>([])
+const [me,setMe]=useState<Employee|null>(null)
 async function load() {
   // First verify the currently logged-in user's employee record.
   const {
@@ -81,7 +82,7 @@ async function load() {
     r.push('/login')
     return
   }
-
+setMe(currentEmployee as Employee)
   // User is authorized — now load the ERP data.
   let [c, e, p, o, po,b] = await Promise.all([
     s.from('customers').select('*').order('name'),
