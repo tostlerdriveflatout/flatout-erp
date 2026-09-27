@@ -382,6 +382,69 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     </table>
   </div>
 </section>}
+ {tab==='Builds'&&
+  <section className="card">
+    <div className="row" style={{justifyContent:'space-between'}}>
+      <div>
+        <h2>Builds</h2>
+        <div className="muted">
+          Simulator builds and installation workflow
+        </div>
+      </div>
+    </div>
+
+    <div className="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Build</th>
+            <th>Name</th>
+            <th>Sales Order</th>
+            <th>Customer</th>
+            <th>Status</th>
+            <th>Technician</th>
+            <th>Installation</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {builds.length===0 ? (
+            <tr>
+              <td colSpan={7}>
+                <div className="muted" style={{padding:20}}>
+                  No builds have been created yet.
+                </div>
+              </td>
+            </tr>
+          ) : (
+            builds.map(b=>{
+              const order=orders.find(o=>o.id===b.order_id)
+              const technician=employees.find(
+                e=>e.id===b.assigned_technician_id
+              )
+
+              return (
+                <tr key={b.id}>
+                  <td><b>{b.build_number}</b></td>
+                  <td>{b.name||'—'}</td>
+                  <td>{order?.order_number||'—'}</td>
+                  <td>{(order?.customers as any)?.name||'—'}</td>
+                  <td>{b.status}</td>
+                  <td>{technician?.name||'Unassigned'}</td>
+                  <td>
+                    {b.installation_date
+                      ? new Date(b.installation_date).toLocaleDateString()
+                      : '—'}
+                  </td>
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  </section>
+}
   {tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}>
   <td><b>{c.name}</b></td>
   <td>{c.company}</td>
