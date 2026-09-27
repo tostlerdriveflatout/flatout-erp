@@ -324,6 +324,32 @@ async function addOrderNote(note:string){if(!selected||!note.trim())return;const
 async function createPurchaseOrder(order:Order,items:Item[]){if(!order.reference_number){alert('Add a Reference # to this Sales Order before creating a PO.');return}if(!items.length)return;const vendors=[...new Set(items.map(i=>i.vendor||'').filter(Boolean))];if(vendors.length!==1){alert('A PO can only contain items from one vendor.');return}const vendor=vendors[0];let {data:po,error}=await s.from('purchase_orders').insert({po_number:order.reference_number,order_id:order.id,vendor,status:'Ordered'}).select('*').single();if(error||!po){alert(error?.message||'Could not create PO.');return}const snapshots=items.map((i,idx)=>({purchase_order_id:po.id,order_item_id:i.id,description:i.description,sku:i.sku,qty:i.qty,unit_cost:i.cost,sort_order:idx}));let {error:itemError}=await s.from('purchase_order_items').insert(snapshots);if(itemError){await s.from('purchase_orders').delete().eq('id',po.id);alert(itemError.message);return}await s.from('order_items').update({purchasing_status:'Ordered'}).in('id',items.map(i=>i.id));await load();let {data:full}=await s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').eq('id',po.id).single();if(full){setSelectedPO(full as any);setSelected(null);setTab('Purchase Order')}}
 async function openInvoice(){if(!selected)return;if(selected.payment_status==='Not Invoiced'){await s.from('orders').update({payment_status:'Invoiced'}).eq('id',selected.id);await refreshOrder()}setTab('Invoice')}
 async function addPayment(fd:FormData){if(!selected)return;const amount=Number(fd.get('amount')||0);if(amount<=0)return;await s.from('payments').insert({order_id:selected.id,amount,payment_method:fd.get('payment_method')||null,reference:fd.get('reference')||null,notes:fd.get('notes')||null});let {data}=await s.from('orders').select('*,customers(*),order_items(*),payments(*),order_notes(*)').eq('id',selected.id).single();if(data){const sell=(data.order_items||[]).reduce((a:any,i:any)=>a+Number(i.qty)*Number(i.sell_price),0);const total=sell+(sell*Number(data.tax_rate||0)/100);const paid=(data.payments||[]).reduce((a:any,p:any)=>a+Number(p.amount),0);const status=paid>=total-.005?'Paid':paid>0?'Partially Paid':'Invoiced';await s.from('orders').update({payment_status:status}).eq('id',selected.id)}setModal('');await refreshOrder();setTab('Invoice')}
+async function createBuild(order:any){
+  const existing=builds.filter(b=>b.order_id===order.id);
+  const buildIndex=existing.length+1;
+
+  const buildNumber=`${order.order_number}-B${buildIndex}`;
+
+  const {data,error}=await s
+    .from('builds')
+    .insert({
+      order_id:order.id,
+      build_number:buildNumber,
+      name:`Simulator ${buildIndex}`,
+      status:'Not Started'
+    })
+    .select()
+    .single();
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  setBuilds(prev=>[data as Build,...prev]);
+
+  alert(`Build ${buildNumber} created.`);
+}
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
 const navItems =
   me?.role === 'Technician'
