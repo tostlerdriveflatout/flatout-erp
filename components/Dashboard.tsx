@@ -48,6 +48,7 @@ type Build = {
   updated_at: string
 };
 export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[editingCustomer,setEditingCustomer]=useState<Customer|null>(null),[editingEmployee,setEditingEmployee]=useState<Employee|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');
+const [builds,setBuilds]=useState<Build[]>([])
 async function load() {
   // First verify the currently logged-in user's employee record.
   const {
@@ -82,7 +83,7 @@ async function load() {
   }
 
   // User is authorized — now load the ERP data.
-  let [c, e, p, o, po] = await Promise.all([
+  let [c, e, p, o, po,b] = await Promise.all([
     s.from('customers').select('*').order('name'),
     s.from('employees').select('*').order('name'),
     s.from('products').select('*').eq('active', true).order('name'),
@@ -90,16 +91,22 @@ async function load() {
       .select('*,customers(*),order_items(*),payments(*),order_notes(*)')
       .order('created_at', { ascending: false }),
     s.from('purchase_orders')
-      .select('*,purchase_order_items(*),orders(*,customers(*))')
-      .order('created_at', { ascending: false })
-  ])
+  .select('*,purchase_order_items(*),orders(*,customers(*))')
+  .order('created_at',{ ascending: false }),
+
+s.from('builds')
+  .select('*')
+  .order('created_at',{ ascending: false })
+])
 
   setCustomers((c.data || []) as Customer[])
   setEmployees((e.data || []) as Employee[])
   setProducts((p.data || []) as Product[])
   setOrders((o.data || []) as any)
   setPurchaseOrders((po.data || []) as any)
+  setBuilds((b.data || []) as Build[])
 }
+
 useEffect(()=>{
   load();
 },[]);     
