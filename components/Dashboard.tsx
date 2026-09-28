@@ -560,12 +560,29 @@ return <div className="shell"><aside className="side"><img className="logo" src=
         </div>
       </div>
 
-      <div className="card">
-        <div className="muted">Technician</div>
-        <div className="value" style={{fontSize:20}}>
-          {technician?.name||'Unassigned'}
-        </div>
-      </div>
+  <div className="card">
+  <div className="muted">Technician</div>
+
+  <select
+    value={selectedBuild.assigned_technician_id||''}
+    onChange={e=>updateBuild(
+      selectedBuild.id,
+      {assigned_technician_id:e.target.value||null}
+    )}
+    style={{marginTop:8,width:'100%'}}
+  >
+    <option value="">Unassigned</option>
+
+    {employees
+      .filter(e=>e.role==='Technician'&&e.active)
+      .map(e=>
+        <option key={e.id} value={e.id}>
+          {e.name}
+        </option>
+      )
+    }
+  </select>
+</div>
 
       <div className="card">
         <div className="muted">Installation Date</div>
