@@ -725,17 +725,22 @@ return <div className="shell"><aside className="side"><img className="logo" src=
                   max={Number(i.qty)}
                   step="1"
                   value={assignment?.qty||0}
-                  onChange={e=>{
-                    const qty=Number(e.target.value);
+onChange={e=>{
+  const qty=Number(e.target.value);
 
-                    if(qty>0){
-                      assignBuildItem(
-                        selectedBuild.id,
-                        i.id,
-                        qty
-                      );
-                    }
-                  }}
+  if(qty<=0){
+    removeBuildItem(
+      selectedBuild.id,
+      i.id
+    );
+  }else{
+    assignBuildItem(
+      selectedBuild.id,
+      i.id,
+      qty
+    );
+  }
+}}
                   style={{width:80}}
                 />
               </td>
