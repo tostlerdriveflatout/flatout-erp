@@ -451,7 +451,14 @@ return <div className="shell"><aside className="side"><img className="logo" src=
               )
 
               return (
-                <tr key={b.id}>
+               <tr
+  key={b.id}
+  onClick={()=>{
+    setSelectedBuild(b);
+    setTab('Build');
+  }}
+  style={{cursor:'pointer'}}
+>
                   <td><b>{b.build_number}</b></td>
                   <td>{b.name||'—'}</td>
                   <td>{order?.order_number||'—'}</td>
