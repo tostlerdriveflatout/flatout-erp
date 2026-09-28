@@ -94,20 +94,22 @@ async function load() {
   }
 setMe(currentEmployee as Employee)
   // User is authorized — now load the ERP data.
-  let [c, e, p, o, po,b] = await Promise.all([
-    s.from('customers').select('*').order('name'),
-    s.from('employees').select('*').order('name'),
-    s.from('products').select('*').eq('active', true).order('name'),
-    s.from('orders')
-      .select('*,customers(*),order_items(*),payments(*),order_notes(*)')
-      .order('created_at', { ascending: false }),
-    s.from('purchase_orders')
-  .select('*,purchase_order_items(*),orders(*,customers(*))')
-  .order('created_at',{ ascending: false }),
-
-s.from('builds')
-  .select('*')
-  .order('created_at',{ ascending: false })
+let [c,e,p,o,po,b,bi] = await Promise.all([
+  s.from('customers').select('*').order('name'),
+  s.from('employees').select('*').order('name'),
+  s.from('products').select('*').eq('active',true).order('name'),
+  s.from('orders')
+    .select('*,customers(*),order_items(*),payments(*),order_notes(*)')
+    .order('created_at',{ascending:false}),
+  s.from('purchase_orders')
+    .select('*,purchase_order_items(*),orders(*,customers(*))')
+    .order('created_at',{ascending:false}),
+  s.from('builds')
+    .select('*')
+    .order('created_at',{ascending:false}),
+  s.from('build_items')
+    .select('*')
+    .order('created_at',{ascending:true})
 ])
 
   setCustomers((c.data || []) as Customer[])
@@ -116,6 +118,7 @@ s.from('builds')
   setOrders((o.data || []) as any)
   setPurchaseOrders((po.data || []) as any)
   setBuilds((b.data || []) as Build[])
+  setBuildItems((bi.data||[]) as BuildItem[])
 }
 
 useEffect(()=>{
