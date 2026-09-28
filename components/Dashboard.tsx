@@ -479,6 +479,61 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     </div>
   </section>
 }
+  {tab==='Build'&&selectedBuild&&(()=>{
+  const order=orders.find(o=>o.id===selectedBuild.order_id)
+  const technician=employees.find(e=>e.id===selectedBuild.assigned_technician_id)
+
+  return <section className="card">
+    <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start'}}>
+      <div>
+        <button
+          className="btn secondary"
+          onClick={()=>{
+            setSelectedBuild(null);
+            setTab('Builds');
+          }}
+        >
+          ← Back to Builds
+        </button>
+
+        <h1 style={{marginBottom:4}}>{selectedBuild.build_number}</h1>
+
+        <div className="muted">
+          {order?.customers?.name||'Customer'} • {order?.order_number||'Sales Order'}
+        </div>
+      </div>
+
+      <div>
+        <b>{selectedBuild.status}</b>
+      </div>
+    </div>
+
+    <div className="cards" style={{marginTop:18}}>
+      <div className="card">
+        <div className="muted">Build Name</div>
+        <div className="value" style={{fontSize:20}}>
+          {selectedBuild.name||'—'}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="muted">Technician</div>
+        <div className="value" style={{fontSize:20}}>
+          {technician?.name||'Unassigned'}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="muted">Installation Date</div>
+        <div className="value" style={{fontSize:20}}>
+          {selectedBuild.installation_date
+            ? new Date(selectedBuild.installation_date).toLocaleDateString()
+            : 'Not Scheduled'}
+        </div>
+      </div>
+    </div>
+  </section>
+})()}
   {tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}>
   <td><b>{c.name}</b></td>
   <td>{c.company}</td>
