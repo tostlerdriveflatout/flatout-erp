@@ -348,6 +348,17 @@ async function createBuild(order:any){
   }
 
   setBuilds(prev=>[data as Build,...prev]);
+
+  const updated=data as Build;
+
+  setBuilds(prev=>prev.map(b=>b.id===id?updated:b));
+
+  if(selectedBuild?.id===id){
+    setSelectedBuild(updated);
+  }
+}
+  alert(`Build ${buildNumber} created.`);
+}
 async function updateBuild(id:string,patch:Partial<Build>){
   const {data,error}=await s
     .from('builds')
@@ -364,16 +375,6 @@ async function updateBuild(id:string,patch:Partial<Build>){
     return;
   }
 
-  const updated=data as Build;
-
-  setBuilds(prev=>prev.map(b=>b.id===id?updated:b));
-
-  if(selectedBuild?.id===id){
-    setSelectedBuild(updated);
-  }
-}
-  alert(`Build ${buildNumber} created.`);
-}
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
 const navItems =
   me?.role === 'Technician'
