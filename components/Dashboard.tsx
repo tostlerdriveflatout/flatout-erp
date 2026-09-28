@@ -584,14 +584,23 @@ return <div className="shell"><aside className="side"><img className="logo" src=
   </select>
 </div>
 
-      <div className="card">
-        <div className="muted">Installation Date</div>
-        <div className="value" style={{fontSize:20}}>
-          {selectedBuild.installation_date
-            ? new Date(selectedBuild.installation_date).toLocaleDateString()
-            : 'Not Scheduled'}
-        </div>
-      </div>
+<div className="card">
+  <div className="muted">Installation Date</div>
+
+  <input
+    type="date"
+    value={
+      selectedBuild.installation_date
+        ? selectedBuild.installation_date.slice(0,10)
+        : ''
+    }
+    onChange={e=>updateBuild(
+      selectedBuild.id,
+      {installation_date:e.target.value||null}
+    )}
+    style={{marginTop:8,width:'100%'}}
+  />
+</div>
     </div>
   </section>
 })()}
