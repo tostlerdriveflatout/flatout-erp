@@ -526,9 +526,27 @@ return <div className="shell"><aside className="side"><img className="logo" src=
         </div>
       </div>
 
-      <div>
-        <b>{selectedBuild.status}</b>
-      </div>
+<div className="field" style={{margin:0,minWidth:220}}>
+  <label>Build Status</label>
+  <select
+    value={selectedBuild.status}
+    onChange={e=>updateBuild(
+      selectedBuild.id,
+      {status:e.target.value as Build['status']}
+    )}
+  >
+    {[
+      'Not Started',
+      'Waiting for Parts',
+      'Ready to Build',
+      'Building',
+      'Build Complete',
+      'Ready for Installation',
+      'Installing',
+      'Completed'
+    ].map(x=><option key={x} value={x}>{x}</option>)}
+  </select>
+</div>
     </div>
 
     <div className="cards" style={{marginTop:18}}>
