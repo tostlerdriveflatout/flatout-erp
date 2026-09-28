@@ -735,6 +735,31 @@ return <div className="shell"><aside className="side"><img className="logo" src=
     }}
   />
 </div>
+    <div className="card" style={{marginTop:16}}>
+  <h3>Installation Notes</h3>
+
+  <textarea
+    value={selectedBuild.installation_notes || ''}
+    onChange={e =>
+      setSelectedBuild({
+        ...selectedBuild,
+        installation_notes:e.target.value
+      })
+    }
+    onBlur={e =>
+      updateBuild(
+        selectedBuild.id,
+        {installation_notes:e.target.value}
+      )
+    }
+    placeholder="Add installation instructions, site access details, special requirements, or other notes..."
+    style={{
+      width:'100%',
+      minHeight:100,
+      resize:'vertical'
+    }}
+  />
+</div>
     <div className="panel" style={{marginTop:18}}>
   <div style={{marginBottom:12}}>
     <h2 style={{margin:0}}>Build Parts</h2>
