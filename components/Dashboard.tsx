@@ -388,7 +388,51 @@ async function updateBuild(id:string,patch:Partial<Build>){
     setSelectedBuild(updated);
   }
 }
+async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
+  const existing=buildItems.find(
+    bi=>bi.build_id===buildId&&bi.order_item_id===orderItemId
+  );
 
+  if(existing){
+    const {data,error}=await s
+      .from('build_items')
+      .update({
+        qty,
+        updated_at:new Date().toISOString()
+      })
+      .eq('id',existing.id)
+      .select()
+      .single();
+
+    if(error){
+      alert(error.message);
+      return;
+    }
+
+    setBuildItems(prev=>
+      prev.map(bi=>bi.id===existing.id?data as BuildItem:bi)
+    );
+
+    return;
+  }
+
+  const {data,error}=await s
+    .from('build_items')
+    .insert({
+      build_id:buildId,
+      order_item_id:orderItemId,
+      qty
+    })
+    .select()
+    .single();
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  setBuildItems(prev=>[...prev,data as BuildItem]);
+}
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
 const navItems =
   me?.role === 'Technician'
