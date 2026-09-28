@@ -658,6 +658,87 @@ return <div className="shell"><aside className="side"><img className="logo" src=
   />
 </div>
     </div>
+    <div className="panel" style={{marginTop:18}}>
+  <div style={{marginBottom:12}}>
+    <h2 style={{margin:0}}>Build Parts</h2>
+    <div className="muted">
+      Assign physical Sales Order items to this simulator.
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Part</th>
+        <th>SKU</th>
+        <th>Ordered Qty</th>
+        <th>Assigned to Build</th>
+        <th>Purchasing Status</th>
+        <th>Tracking</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {(order?.order_items||[])
+        .filter((i:any)=>i.item_type==='Product')
+        .map((i:any)=>{
+          const assignment=buildItems.find(
+            bi=>
+              bi.build_id===selectedBuild.id &&
+              bi.order_item_id===i.id
+          );
+
+          return (
+            <tr key={i.id}>
+              <td>
+                <b>{i.description}</b>
+                <div className="muted">{i.vendor||'—'}</div>
+              </td>
+
+              <td>{i.sku||'—'}</td>
+
+              <td>{Number(i.qty)}</td>
+
+              <td>
+                <input
+                  type="number"
+                  min="0"
+                  max={Number(i.qty)}
+                  step="1"
+                  value={assignment?.qty||0}
+                  onChange={e=>{
+                    const qty=Number(e.target.value);
+
+                    if(qty>0){
+                      assignBuildItem(
+                        selectedBuild.id,
+                        i.id,
+                        qty
+                      );
+                    }
+                  }}
+                  style={{width:80}}
+                />
+              </td>
+
+              <td>{i.purchasing_status||'—'}</td>
+
+              <td>{i.tracking||'—'}</td>
+            </tr>
+          );
+        })}
+
+      {!(order?.order_items||[])
+        .some((i:any)=>i.item_type==='Product') &&
+        <tr>
+          <td colSpan={6} className="muted">
+            No physical products are on this Sales Order.
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
   </section>
 })()}
   {tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}>
