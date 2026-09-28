@@ -47,8 +47,17 @@ type Build = {
   created_at: string,
   updated_at: string
 };
+type BuildItem = {
+  id: string,
+  build_id: string,
+  order_item_id: string,
+  qty: number,
+  created_at: string,
+  updated_at: string
+};
 export default function Dashboard({email}:{email:string}){const s=supabase(),r=useRouter();const [tab,setTab]=useState('Dashboard'),[customers,setCustomers]=useState<Customer[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[editingCustomer,setEditingCustomer]=useState<Customer|null>(null),[editingEmployee,setEditingEmployee]=useState<Employee|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');
 const [builds,setBuilds]=useState<Build[]>([])
+const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
 const [me,setMe]=useState<Employee|null>(null)
 async function load() {
