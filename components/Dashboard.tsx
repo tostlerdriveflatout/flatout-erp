@@ -710,6 +710,31 @@ return <div className="shell"><aside className="side"><img className="logo" src=
   />
 </div>
     </div>
+    <div className="card" style={{marginTop:16}}>
+  <h3>Build Notes</h3>
+
+  <textarea
+    value={selectedBuild.build_notes || ''}
+    onChange={e =>
+      setSelectedBuild({
+        ...selectedBuild,
+        build_notes:e.target.value
+      })
+    }
+    onBlur={e =>
+      updateBuild(
+        selectedBuild.id,
+        {build_notes:e.target.value}
+      )
+    }
+    placeholder="Add build instructions, configuration details, issues, or other notes..."
+    style={{
+      width:'100%',
+      minHeight:100,
+      resize:'vertical'
+    }}
+  />
+</div>
     <div className="panel" style={{marginTop:18}}>
   <div style={{marginBottom:12}}>
     <h2 style={{margin:0}}>Build Parts</h2>
