@@ -648,9 +648,9 @@ return <div className="shell"><aside className="side"><img className="logo" src=
   >
     <option value="">Unassigned</option>
 
-    {employees
-      .filter(e=>e.role==='Technician'&&e.active)
-      .map(e=>
+{employees
+  .filter(e=>e.active)
+  .map(e=>
         <option key={e.id} value={e.id}>
           {e.name}
         </option>
