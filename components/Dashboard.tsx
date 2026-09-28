@@ -348,7 +348,30 @@ async function createBuild(order:any){
   }
 
   setBuilds(prev=>[data as Build,...prev]);
+async function updateBuild(id:string,patch:Partial<Build>){
+  const {data,error}=await s
+    .from('builds')
+    .update({
+      ...patch,
+      updated_at:new Date().toISOString()
+    })
+    .eq('id',id)
+    .select()
+    .single();
 
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  const updated=data as Build;
+
+  setBuilds(prev=>prev.map(b=>b.id===id?updated:b));
+
+  if(selectedBuild?.id===id){
+    setSelectedBuild(updated);
+  }
+}
   alert(`Build ${buildNumber} created.`);
 }
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
