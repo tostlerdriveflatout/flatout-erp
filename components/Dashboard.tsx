@@ -466,6 +466,25 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
 
   setBuildItems(prev => [...prev,data as BuildItem]);
 }
+async function removeBuildItem(buildId:string,orderItemId:string){
+  const existing=buildItems.find(
+    bi=>bi.build_id===buildId&&bi.order_item_id===orderItemId
+  );
+
+  if(!existing)return;
+
+  const {error}=await s
+    .from('build_items')
+    .delete()
+    .eq('id',existing.id);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  setBuildItems(prev=>prev.filter(bi=>bi.id!==existing.id));
+}
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
 const navItems =
   me?.role === 'Technician'
