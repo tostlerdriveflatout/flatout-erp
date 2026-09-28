@@ -389,12 +389,45 @@ async function updateBuild(id:string,patch:Partial<Build>){
   }
 }
 async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
-  const existing=buildItems.find(
-    bi=>bi.build_id===buildId&&bi.order_item_id===orderItemId
+  // Find the original Sales Order item so we know how many were ordered
+  const orderItem = orders
+    .flatMap(o => o.order_items || [])
+    .find((i:any) => i.id === orderItemId);
+
+  if(!orderItem){
+    alert('Could not find the Sales Order item.');
+    return;
+  }
+
+  const orderedQty = Number(orderItem.qty);
+
+  // Count how many of this item are already assigned to OTHER builds
+  const assignedToOtherBuilds = buildItems
+    .filter(
+      bi =>
+        bi.order_item_id === orderItemId &&
+        bi.build_id !== buildId
+    )
+    .reduce((total, bi) => total + Number(bi.qty), 0);
+
+  const availableQty = orderedQty - assignedToOtherBuilds;
+
+  // Prevent assigning more than the Sales Order contains
+  if(qty > availableQty){
+    alert(
+      `Only ${availableQty} remaining ${
+        availableQty === 1 ? 'is' : 'are'
+      } available to assign.`
+    );
+    return;
+  }
+
+  const existing = buildItems.find(
+    bi => bi.build_id === buildId && bi.order_item_id === orderItemId
   );
 
   if(existing){
-    const {data,error}=await s
+    const {data,error} = await s
       .from('build_items')
       .update({
         qty,
@@ -409,14 +442,14 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
       return;
     }
 
-    setBuildItems(prev=>
-      prev.map(bi=>bi.id===existing.id?data as BuildItem:bi)
+    setBuildItems(prev =>
+      prev.map(bi => bi.id === existing.id ? data as BuildItem : bi)
     );
 
     return;
   }
 
-  const {data,error}=await s
+  const {data,error} = await s
     .from('build_items')
     .insert({
       build_id:buildId,
@@ -431,27 +464,8 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
     return;
   }
 
-  setBuildItems(prev=>[...prev,data as BuildItem]);
+  setBuildItems(prev => [...prev,data as BuildItem]);
 }
-async function removeBuildItem(buildId:string,orderItemId:string){
-  const existing=buildItems.find(
-    bi=>bi.build_id===buildId&&bi.order_item_id===orderItemId
-  );
-
-  if(!existing)return;
-
-  const {error}=await s
-    .from('build_items')
-    .delete()
-    .eq('id',existing.id);
-
-  if(error){
-    alert(error.message);
-    return;
-  }
-
-  setBuildItems(prev=>prev.filter(bi=>bi.id!==existing.id));
-} 
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
 const navItems =
   me?.role === 'Technician'
