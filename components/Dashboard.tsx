@@ -1191,16 +1191,6 @@ onChange={e=>{
         }}
       />
 
-      <button
-        className="btn secondary"
-        onClick={()=>{
-          setOrderPage(1);
-          loadOrdersPage(1,orderSearch,orderStatusFilter);
-        }}
-      >
-        Search
-      </button>
-
       <select
         value={orderStatusFilter}
         onChange={e=>{
