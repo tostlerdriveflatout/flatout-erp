@@ -502,19 +502,47 @@ async function removeBuildItem(buildId:string,orderItemId:string){
   setBuildItems(prev=>prev.filter(bi=>bi.id!==existing.id));
 }
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
-const navItems =
-  me?.role === 'Technician'
-    ? ['Dashboard', 'Builds']
-    : [
-        'Dashboard',
-        'Customers',
-        'Products',
-        'Orders',
-        'Purchasing',
-        'Purchase Orders',
-        'Builds',
-        'Employees'
-      ];
+const modules = [
+  'Sales',
+  'Purchases',
+  'Builds',
+  'Inventory',
+  'Accounting',
+  'Employees'
+];
+
+const moduleNavItems:Record<string,string[]> = {
+  Sales: [
+    'Dashboard',
+    'Customers',
+    'Quotations',
+    'Orders',
+    'Products'
+  ],
+  Purchases: [
+    'Dashboard',
+    'Purchasing',
+    'Purchase Orders',
+    'Products'
+  ],
+  Builds: [
+    'Dashboard',
+    'Builds'
+  ],
+  Inventory: [
+    'Dashboard',
+    'Products'
+  ],
+  Accounting: [
+    'Dashboard'
+  ],
+  Employees: [
+    'Dashboard',
+    'Employees'
+  ]
+};
+
+const navItems = moduleNavItems[module] || ['Dashboard'];
 return <div className="shell"><aside className="side"><img className="logo" src="/flatout-logo.svg"/><div className="nav">{navItems.map(x=><button key={x} className={tab===x?'active':''} onClick={()=>{setTab(x);setSelected(null);setSelectedPO(null)}}>{x}</button>)}</div></aside><main className="main"><div className="top"><div><b>{selected?(tab==='Invoice'?`${selected.order_number} — Invoice`:selected.order_number):selectedPO&&tab==='Purchase Order'?`${selectedPO.po_number} — Purchase Order`:tab}</b><div className="muted">Flatout Sim Racing ERP</div></div><div className="row"><span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
 {tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{orders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div><div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Sell</th><th>Margin</th></tr></thead><tbody>{orders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td>{o.order_number}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${t.sell.toLocaleString()}</td><td>{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
 {tab==='Employees'&&<section className="card">
