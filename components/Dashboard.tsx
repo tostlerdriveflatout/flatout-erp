@@ -148,6 +148,42 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
 }
 
 useEffect(()=>{
+  async function loadOrdersPage(
+  page = orderPage,
+  searchTerm = orderSearch,
+  statusFilter = orderStatusFilter
+){
+  let query = s
+    .from('orders')
+    .select(
+      '*,customers(*),order_items(*),payments(*),order_notes(*)',
+      {count:'exact'}
+    )
+    .order('created_at',{ascending:false});
+
+  if(statusFilter !== 'All'){
+    query = query.eq('status',statusFilter);
+  }
+
+  if(searchTerm.trim()){
+    query = query.or(
+      `order_number.ilike.%${searchTerm.trim()}%,reference_number.ilike.%${searchTerm.trim()}%`
+    );
+  }
+
+  const from = (page - 1) * ORDERS_PER_PAGE;
+  const to = from + ORDERS_PER_PAGE - 1;
+
+  const {data,count,error} = await query.range(from,to);
+
+  if(error){
+    console.error('Order search error:',error);
+    return;
+  }
+
+  setOrders((data || []) as any);
+  setOrderTotal(count || 0);
+}
   load();
 },[]);     
 const need=orders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
