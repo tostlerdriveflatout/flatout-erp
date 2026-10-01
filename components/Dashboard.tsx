@@ -502,14 +502,12 @@ async function removeBuildItem(buildId:string,orderItemId:string){
   setBuildItems(prev=>prev.filter(bi=>bi.id!==existing.id));
 }
 let filteredCustomers=customers.filter(c=>[c.name,c.company,c.email,c.phone].some(v=>(v||'').toLowerCase().includes(search.toLowerCase())));
-const modules = [
-  'Sales',
-  'Purchases',
-  'Builds',
-  'Inventory',
-  'Accounting',
-  'Employees'
-];
+const modules =
+  me?.role === 'Admin'
+    ? ['Sales', 'Purchases', 'Builds', 'Inventory', 'Accounting', 'Employees']
+    : me?.role === 'Technician'
+      ? ['Builds']
+      : ['Sales', 'Purchases', 'Builds', 'Inventory'];
 
 const moduleNavItems:Record<string,string[]> = {
   Sales: [
