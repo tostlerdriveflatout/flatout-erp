@@ -109,6 +109,10 @@ async function load() {
     return
   }
 setMe(currentEmployee as Employee)
+  if(currentEmployee.role === 'Technician'){
+  setModule('Builds');
+  setTab('Dashboard');
+}
   // User is authorized — now load the ERP data.
 let [c,e,p,o,po,b,bi] = await Promise.all([
   s.from('customers').select('*').order('name'),
