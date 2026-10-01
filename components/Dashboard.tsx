@@ -147,7 +147,6 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   setBuildItems((bi.data||[]) as BuildItem[])
 }
 
-useEffect(()=>{
   async function loadOrdersPage(
   page = orderPage,
   searchTerm = orderSearch,
