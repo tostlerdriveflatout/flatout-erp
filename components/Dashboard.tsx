@@ -57,8 +57,19 @@ type BuildItem = {
 };
 export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
-const [tab,setTab]=useState('Dashboard'),
-const [module,setModule]=useState('Sales'),[customers,setCustomers]=useState<Customer[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[products,setProducts]=useState<Product[]>([]),[orders,setOrders]=useState<Order[]>([]),[purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]),[selected,setSelected]=useState<Order|null>(null),[selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null),[editingCustomer,setEditingCustomer]=useState<Customer|null>(null),[editingEmployee,setEditingEmployee]=useState<Employee|null>(null),[modal,setModal]=useState(''),[search,setSearch]=useState('');
+const [tab,setTab]=useState('Dashboard'),const [customers,setCustomers]=useState<Customer[]>([]);
+const [employees,setEmployees]=useState<Employee[]>([]);
+const [products,setProducts]=useState<Product[]>([]);
+const [orders,setOrders]=useState<Order[]>([]);
+const [purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]);
+
+const [selected,setSelected]=useState<Order|null>(null);
+const [selectedPO,setSelectedPO]=useState<PurchaseOrder|null>(null);
+const [editingCustomer,setEditingCustomer]=useState<Customer|null>(null);
+const [editingEmployee,setEditingEmployee]=useState<Employee|null>(null);
+
+const [modal,setModal]=useState('');
+const [search,setSearch]=useState('');
 const [builds,setBuilds]=useState<Build[]>([])
 const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
