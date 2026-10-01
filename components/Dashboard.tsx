@@ -1247,6 +1247,23 @@ onChange={e=>{
     }}
     style={{padding:9,width:320}}
   />
+  <select
+  value={productCategoryFilter}
+  onChange={e=>{
+    setProductCategoryFilter(e.target.value);
+    setProductPage(1);
+  }}
+  style={{padding:9}}
+>
+  <option value="All">All Categories</option>
+  {[...new Set(products.map(p=>p.category).filter(Boolean))]
+    .sort()
+    .map(category=>
+      <option key={category} value={category}>
+        {category}
+      </option>
+    )}
+</select>
 </div>
   <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
 {tab==='Orders'&&<>
