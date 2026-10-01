@@ -221,10 +221,48 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
     return;
   }
 
-  setCustomers((data || []) as Customer[]);
-  setCustomerTotal(count || 0);
+setCustomers((data || []) as Customer[]);
+setCustomerTotal(count || 0);
 }
-  useEffect(()=>{
+
+async function loadProductsPage(
+  page = productPage,
+  searchTerm = productSearch,
+  categoryFilter = productCategoryFilter
+){
+  let query = s
+    .from('products')
+    .select('*',{count:'exact'})
+    .eq('active',true)
+    .order('name',{ascending:true});
+
+  if(searchTerm.trim()){
+    const term = searchTerm.trim();
+
+    query = query.or(
+      `name.ilike.%${term}%,sku.ilike.%${term}%,vendor.ilike.%${term}%,category.ilike.%${term}%`
+    );
+  }
+
+  if(categoryFilter !== 'All'){
+    query = query.eq('category',categoryFilter);
+  }
+
+  const from = (page - 1) * PRODUCTS_PER_PAGE;
+  const to = from + PRODUCTS_PER_PAGE - 1;
+
+  const {data,count,error} = await query.range(from,to);
+
+  if(error){
+    console.error('Product search error:',error);
+    return;
+  }
+
+  setProducts((data || []) as Product[]);
+  setProductTotal(count || 0);
+}
+
+useEffect(()=>{
   load();
 },[])
 useEffect(()=>{
