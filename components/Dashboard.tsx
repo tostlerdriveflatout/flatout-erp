@@ -72,6 +72,12 @@ const [editingEmployee,setEditingEmployee]=useState<Employee|null>(null);
 
 const [modal,setModal]=useState('');
 const [search,setSearch]=useState('');
+const [orderSearch,setOrderSearch]=useState('');
+const [orderStatusFilter,setOrderStatusFilter]=useState('All');
+const [orderPage,setOrderPage]=useState(1);
+const [orderTotal,setOrderTotal]=useState(0);
+
+const ORDERS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
 const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
