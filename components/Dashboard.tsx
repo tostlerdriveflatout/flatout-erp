@@ -78,6 +78,11 @@ const [orderPage,setOrderPage]=useState(1);
 const [orderTotal,setOrderTotal]=useState(0);
 
 const ORDERS_PER_PAGE = 50;
+  const [customerSearch,setCustomerSearch]=useState('');
+const [customerPage,setCustomerPage]=useState(1);
+const [customerTotal,setCustomerTotal]=useState(0);
+
+const CUSTOMERS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
 const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
