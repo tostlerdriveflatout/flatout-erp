@@ -1068,7 +1068,10 @@ onChange={e=>{
       <input
         placeholder="Search customers..."
         value={customerSearch}
-        onChange={e=>setCustomerSearch(e.target.value)}
+        onChange={e=>{
+  setCustomerSearch(e.target.value);
+  setCustomerPage(1);
+}}
         onKeyDown={e=>{
           if(e.key==='Enter'){
             setCustomerPage(1);
