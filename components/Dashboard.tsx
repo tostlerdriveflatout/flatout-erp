@@ -1024,8 +1024,132 @@ onChange={e=>{
   </div>
   <button className="btn" onClick={syncPriceGuide}>Sync Price Guide</button>
 </div><div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
-{tab==='Orders'&&<><button className="btn" onClick={()=>setModal('order')}>+ New Order</button><div className="panel"><table><thead><tr><th>Order</th><th>Reference #</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead><tbody>{orders.map(o=><tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td><b>{o.order_number}</b></td><td>{o.reference_number||'—'}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${totals(o).sell.toLocaleString()}</td></tr>)}</tbody></table></div></>}
-{tab==='Purchasing'&&<PurchasingView orders={orders} updateItem={updateItem} createPurchaseOrder={createPurchaseOrder} openOrder={(o:any)=>{setSelected(o);setSelectedPO(null);setTab('Order')}}/>}
+{tab==='Orders'&&<>
+  <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
+    <button
+      className="btn"
+      onClick={()=>setModal('order')}
+    >
+      + New Order
+    </button>
+
+    <div className="row">
+      <input
+        placeholder="Search order or reference #..."
+        value={orderSearch}
+        onChange={e=>setOrderSearch(e.target.value)}
+        onKeyDown={e=>{
+          if(e.key==='Enter'){
+            setOrderPage(1);
+            loadOrdersPage(1,orderSearch,orderStatusFilter);
+          }
+        }}
+      />
+
+      <button
+        className="btn secondary"
+        onClick={()=>{
+          setOrderPage(1);
+          loadOrdersPage(1,orderSearch,orderStatusFilter);
+        }}
+      >
+        Search
+      </button>
+
+      <select
+        value={orderStatusFilter}
+        onChange={e=>{
+          setOrderStatusFilter(e.target.value);
+          setOrderPage(1);
+        }}
+      >
+        <option value="All">All Statuses</option>
+        <option value="Draft">Draft</option>
+        <option value="Confirmed">Confirmed</option>
+        <option value="Parts Ordering">Parts Ordering</option>
+        <option value="Parts Ordered">Parts Ordered</option>
+        <option value="Build Ready">Build Ready</option>
+        <option value="Building">Building</option>
+        <option value="Ready for Installation">Ready for Installation</option>
+        <option value="Completed">Completed</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Reference #</th>
+          <th>Customer</th>
+          <th>Status</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {orders.map(o=>
+          <tr
+            key={o.id}
+            onClick={()=>{
+              setSelected(o);
+              setTab('Order');
+            }}
+            style={{cursor:'pointer'}}
+          >
+            <td><b>{o.order_number}</b></td>
+            <td>{o.reference_number||'—'}</td>
+            <td>{(o.customers as any)?.name}</td>
+            <td>{o.status}</td>
+            <td>${totals(o).sell.toLocaleString()}</td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  <div
+    className="row"
+    style={{justifyContent:'space-between',marginTop:12}}
+  >
+    <div className="muted">
+      {orderTotal === 0
+        ? 'No orders found'
+        : `${((orderPage-1)*ORDERS_PER_PAGE)+1}–${Math.min(
+            orderPage*ORDERS_PER_PAGE,
+            orderTotal
+          )} of ${orderTotal}`
+      }
+    </div>
+
+    <div className="row">
+      <button
+        className="btn secondary"
+        disabled={orderPage===1}
+        onClick={()=>setOrderPage(p=>Math.max(1,p-1))}
+      >
+        Previous
+      </button>
+
+      <span>
+        Page {orderPage} of {Math.max(
+          1,
+          Math.ceil(orderTotal/ORDERS_PER_PAGE)
+        )}
+      </span>
+
+      <button
+        className="btn secondary"
+        disabled={orderPage>=Math.ceil(orderTotal/ORDERS_PER_PAGE)}
+        onClick={()=>setOrderPage(p=>p+1)}
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</>}
+      {tab==='Purchasing'&&<PurchasingView orders={orders} updateItem={updateItem} createPurchaseOrder={createPurchaseOrder} openOrder={(o:any)=>{setSelected(o);setSelectedPO(null);setTab('Order')}}/>}
 {tab==='Purchase Orders'&&<PurchaseOrdersView purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setSelected(null);setTab('Purchase Order')}}/>}
 {tab==='Purchase Order'&&selectedPO&&<PurchaseOrderView po={selectedPO} back={()=>{setSelectedPO(null);setTab('Purchase Orders')}}/>}
 {tab==='Order'&&selected&&<OrderView o={selected} products={products} totals={totals(selected)} addProduct={addProduct} addOther={()=>setModal('other')} openInvoice={openInvoice} dup={dup} del={del} updateItem={updateItem} updateShippingAddress={updateShippingAddress} updateReferenceNumber={updateReferenceNumber} updateOrderStatus={updateOrderStatus} createPurchaseOrder={createPurchaseOrder} purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setTab('Purchase Order')}} addOrderNote={addOrderNote} createBuild={createBuild}/>}
