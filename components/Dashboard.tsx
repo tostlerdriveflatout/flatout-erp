@@ -222,14 +222,18 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   load();
 },[])
 useEffect(()=>{
-  if(tab === 'Orders'){
+  if(tab !== 'Orders') return;
+
+  const timer = setTimeout(()=>{
     loadOrdersPage(
       orderPage,
       orderSearch,
       orderStatusFilter
     );
-  }
-},[tab,orderPage,orderStatusFilter]);  
+  },300);
+
+  return ()=>clearTimeout(timer);
+},[tab,orderPage,orderSearch,orderStatusFilter]);
 
 useEffect(()=>{
   if(tab !== 'Customers') return;
