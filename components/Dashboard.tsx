@@ -1182,7 +1182,10 @@ onChange={e=>{
       <input
         placeholder="Search order or reference #..."
         value={orderSearch}
-        onChange={e=>setOrderSearch(e.target.value)}
+        onChange={e=>{
+  setOrderSearch(e.target.value);
+  setOrderPage(1);
+}}
         onKeyDown={e=>{
           if(e.key==='Enter'){
             setOrderPage(1);
