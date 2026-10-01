@@ -1256,7 +1256,7 @@ onChange={e=>{
   style={{padding:9}}
 >
   <option value="All">All Categories</option>
-  {[...new Set(products.map(p=>p.category).filter(Boolean))]
+  {[...new Set(products.map(p=>p.category).filter((category): category is string => Boolean(category)))]
     .sort()
     .map(category=>
       <option key={category} value={category}>
