@@ -57,7 +57,7 @@ type BuildItem = {
 };
 export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
-const [tab,setTab]=useState('Dashboard'),
+const [tab,setTab]=useState('Dashboard');
 const [module,setModule]=useState('Sales');
 const [customers,setCustomers]=useState<Customer[]>([]);
 const [employees,setEmployees]=useState<Employee[]>([]);
