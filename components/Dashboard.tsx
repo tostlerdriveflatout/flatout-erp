@@ -183,7 +183,9 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   setOrders((data || []) as any);
   setOrderTotal(count || 0);
 }
+  useEffect(()=>{
   load();
+},[])
 useEffect(()=>{
   if(tab === 'Orders'){
     loadOrdersPage(
