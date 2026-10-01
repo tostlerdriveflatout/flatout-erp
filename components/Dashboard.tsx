@@ -1223,13 +1223,32 @@ onChange={e=>{
     </div>
   </div>
 </>}
-{tab==='Products'&&<><div className="row" style={{justifyContent:'space-between'}}>
+{tab==='Products'&&<>
+<div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
   <div className="row">
     <b>Product catalog</b>
-    <span className="muted">Price Guide sync will update this catalog; historical orders remain unchanged.</span>
+    <span className="muted">
+      Price Guide sync will update this catalog; historical orders remain unchanged.
+    </span>
   </div>
-  <button className="btn" onClick={syncPriceGuide}>Sync Price Guide</button>
-</div><div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
+
+  <button className="btn" onClick={syncPriceGuide}>
+    Sync Price Guide
+  </button>
+</div>
+
+<div className="row" style={{marginBottom:12}}>
+  <input
+    placeholder="Search name, SKU, vendor, or category..."
+    value={productSearch}
+    onChange={e=>{
+      setProductSearch(e.target.value);
+      setProductPage(1);
+    }}
+    style={{padding:9,width:320}}
+  />
+</div>
+  <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
 {tab==='Orders'&&<>
   <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
     <button
