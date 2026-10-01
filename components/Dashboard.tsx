@@ -83,6 +83,12 @@ const [customerPage,setCustomerPage]=useState(1);
 const [customerTotal,setCustomerTotal]=useState(0);
 
 const CUSTOMERS_PER_PAGE = 50;
+  const [productSearch,setProductSearch]=useState('');
+const [productCategoryFilter,setProductCategoryFilter]=useState('All');
+const [productPage,setProductPage]=useState(1);
+const [productTotal,setProductTotal]=useState(0);
+  
+const PRODUCTS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
 const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
