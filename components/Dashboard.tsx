@@ -188,6 +188,36 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   setOrders((data || []) as any);
   setOrderTotal(count || 0);
 }
+  async function loadCustomersPage(
+  page = customerPage,
+  searchTerm = customerSearch
+){
+  let query = s
+    .from('customers')
+    .select('*',{count:'exact'})
+    .order('name',{ascending:true});
+
+  if(searchTerm.trim()){
+    const term = searchTerm.trim();
+
+    query = query.or(
+      `name.ilike.%${term}%,company.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`
+    );
+  }
+
+  const from = (page - 1) * CUSTOMERS_PER_PAGE;
+  const to = from + CUSTOMERS_PER_PAGE - 1;
+
+  const {data,count,error} = await query.range(from,to);
+
+  if(error){
+    console.error('Customer search error:',error);
+    return;
+  }
+
+  setCustomers((data || []) as Customer[]);
+  setCustomerTotal(count || 0);
+}
   useEffect(()=>{
   load();
 },[])
