@@ -752,6 +752,8 @@ return <div className="shell">
             setModule(m);
             setTab('Dashboard');
             setSelected(null);
+
+        
             setSelectedPO(null);
             setSelectedBuild(null);
           }}
@@ -1265,7 +1267,52 @@ onChange={e=>{
     )}
 </select>
 </div>
-  <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></>}
+  <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></tbody></table></div>
+
+<div
+  className="row"
+  style={{justifyContent:'space-between',marginTop:12}}
+>
+  <div className="muted">
+    {productTotal === 0
+      ? 'No products found'
+      : `${((productPage-1)*PRODUCTS_PER_PAGE)+1}–${Math.min(
+          productPage*PRODUCTS_PER_PAGE,
+          productTotal
+        )} of ${productTotal}`
+    }
+  </div>
+
+  <div className="row">
+    <button
+      className="btn secondary"
+      disabled={productPage===1}
+      onClick={()=>setProductPage(p=>Math.max(1,p-1))}
+    >
+      Previous
+    </button>
+
+    <span>
+      Page {productPage} of {Math.max(
+        1,
+        Math.ceil(productTotal/PRODUCTS_PER_PAGE)
+      )}
+    </span>
+
+    <button
+      className="btn secondary"
+      disabled={
+        productPage>=Math.ceil(
+          productTotal/PRODUCTS_PER_PAGE
+        )
+      }
+      onClick={()=>setProductPage(p=>p+1)}
+    >
+      Next
+    </button>
+  </div>
+</div>
+</>}</>}
 {tab==='Orders'&&<>
   <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
     <button
