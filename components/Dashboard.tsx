@@ -1043,23 +1043,116 @@ onChange={e=>{
 </div>
   </section>
 })()}
-  {tab==='Customers'&&<><div className="row"><button className="btn" onClick={()=>setModal('customer')}>+ New Customer</button><input placeholder="Search customers" value={search} onChange={e=>setSearch(e.target.value)} style={{padding:9,width:320}}/></div><div className="panel"><h2>Customers</h2><table><tbody>{filteredCustomers.map(c=><tr key={c.id}>
-  <td><b>{c.name}</b></td>
-  <td>{c.company}</td>
-  <td>{c.email}</td>
-  <td>{c.phone}</td>
-  <td>
+{tab==='Customers'&&<>
+  <div
+    className="row"
+    style={{justifyContent:'space-between',marginBottom:12}}
+  >
     <button
-      className="btn secondary"
-      onClick={()=>{
-        setEditingCustomer(c);
-        setModal('editCustomer');
-      }}
+      className="btn"
+      onClick={()=>setModal('customer')}
     >
-      Edit
+      + New Customer
     </button>
-  </td>
-</tr>)}</tbody></table></div></>}
+
+    <div className="row">
+      <input
+        placeholder="Search customers..."
+        value={customerSearch}
+        onChange={e=>setCustomerSearch(e.target.value)}
+        onKeyDown={e=>{
+          if(e.key==='Enter'){
+            setCustomerPage(1);
+            loadCustomersPage(1,customerSearch);
+          }
+        }}
+        style={{padding:9,width:320}}
+      />
+
+      <button
+        className="btn secondary"
+        onClick={()=>{
+          setCustomerPage(1);
+          loadCustomersPage(1,customerSearch);
+        }}
+      >
+        Search
+      </button>
+    </div>
+  </div>
+
+  <div className="panel">
+    <h2>Customers</h2>
+
+    <table>
+      <tbody>
+        {customers.map(c=>
+          <tr key={c.id}>
+            <td><b>{c.name}</b></td>
+            <td>{c.company}</td>
+            <td>{c.email}</td>
+            <td>{c.phone}</td>
+            <td>
+              <button
+                className="btn secondary"
+                onClick={()=>{
+                  setEditingCustomer(c);
+                  setModal('editCustomer');
+                }}
+              >
+                Edit
+              </button>
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  <div
+    className="row"
+    style={{justifyContent:'space-between',marginTop:12}}
+  >
+    <div className="muted">
+      {customerTotal === 0
+        ? 'No customers found'
+        : `${((customerPage-1)*CUSTOMERS_PER_PAGE)+1}–${Math.min(
+            customerPage*CUSTOMERS_PER_PAGE,
+            customerTotal
+          )} of ${customerTotal}`
+      }
+    </div>
+
+    <div className="row">
+      <button
+        className="btn secondary"
+        disabled={customerPage===1}
+        onClick={()=>setCustomerPage(p=>Math.max(1,p-1))}
+      >
+        Previous
+      </button>
+
+      <span>
+        Page {customerPage} of {Math.max(
+          1,
+          Math.ceil(customerTotal/CUSTOMERS_PER_PAGE)
+        )}
+      </span>
+
+      <button
+        className="btn secondary"
+        disabled={
+          customerPage>=Math.ceil(
+            customerTotal/CUSTOMERS_PER_PAGE
+          )
+        }
+        onClick={()=>setCustomerPage(p=>p+1)}
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</>}
 {tab==='Products'&&<><div className="row" style={{justifyContent:'space-between'}}>
   <div className="row">
     <b>Product catalog</b>
