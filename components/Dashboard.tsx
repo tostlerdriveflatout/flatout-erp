@@ -531,6 +531,23 @@ async function dup(i:Item){let {id,...copy}=i as any;copy.tracking=null;if(copy.
 async function del(i:Item){if(!confirm(`Remove ${i.description}?`))return;await s.from('order_items').delete().eq('id',i.id);refreshOrder()}
 async function updateItem(i:Item,k:string,v:any){await s.from('order_items').update({[k]:v}).eq('id',i.id);refreshOrder()}
 async function updateShippingAddress(address:string){if(!selected)return;await s.from('orders').update({shipping_address:address||null}).eq('id',selected.id);await refreshOrder()}
+async function updateOrderFinancials(
+  taxRate:number,
+  shippingAmount:number,
+  taxExempt:boolean
+){
+  if(!selected)return;
+
+  await s.from('orders')
+    .update({
+      tax_rate:taxRate,
+      shipping_amount:shippingAmount,
+      tax_exempt:taxExempt
+    })
+    .eq('id',selected.id);
+
+  await refreshOrder();
+}
 async function updateReferenceNumber(reference:string){if(!selected)return;await s.from('orders').update({reference_number:reference.trim()||null}).eq('id',selected.id);await refreshOrder()}
 async function updateOrderStatus(status:string){if(!selected)return;await s.from('orders').update({status}).eq('id',selected.id);await refreshOrder()}
 async function addOrderNote(note:string){if(!selected||!note.trim())return;const {data:{user}}=await s.auth.getUser();await s.from('order_notes').insert({order_id:selected.id,note:note.trim(),created_by:user?.id||null});await refreshOrder()}
