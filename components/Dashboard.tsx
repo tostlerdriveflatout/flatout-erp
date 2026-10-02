@@ -1267,7 +1267,7 @@ onChange={e=>{
     )}
 </select>
 </div>
-  <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div></tbody></table></div>
+  <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th>Sell</th><th>Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td>${Number(p.sell_price).toLocaleString()}</td><td>{p.cost==null?'—':'$'+Number(p.cost).toLocaleString()}</td></tr>)}</tbody></table></div>
 <div
   className="row"
   style={{justifyContent:'space-between',marginTop:12}}
@@ -1311,7 +1311,7 @@ onChange={e=>{
     </button>
   </div>
 </div>
-</>}</>}
+</>}
 {tab==='Orders'&&<>
   <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
     <button
