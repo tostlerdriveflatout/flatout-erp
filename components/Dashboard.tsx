@@ -1775,7 +1775,37 @@ const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p
     )}
   </div>
 
+<div className="grid">
+    <div className="field" style={{margin:0}}>
+      <label>Reference #</label>
+      {editingOrderDetails ? (
+        <input
+          value={reference}
+          onChange={e=>setReference(e.target.value)}
+          placeholder="e.g. PO Mansell"
+        />
+      ) : (
+        <div>{o.reference_number||'—'}</div>
+      )}
+    </div>
 
+    <div className="field" style={{margin:0}}>
+      <label>Shipping Address</label>
+      {editingOrderDetails ? (
+        <textarea
+          value={shipping}
+          onChange={e=>setShipping(e.target.value)}
+          placeholder="Shipping address for this order"
+          rows={2}
+          style={{width:'100%',resize:'vertical'}}
+        />
+      ) : (
+        <div style={{whiteSpace:'pre-line'}}>
+          {o.shipping_address||'—'}
+        </div>
+      )}
+    </div>
+  
     <div className="field" style={{margin:0}}>
       <label>Tax Rate (%)</label>
       {editingOrderDetails ? (
