@@ -538,13 +538,20 @@ async function updateOrderFinancials(
 ){
   if(!selected)return;
 
-  await s.from('orders')
+  const {error}=await s
+    .from('orders')
     .update({
       tax_rate:taxRate,
       shipping_amount:shippingAmount,
       tax_exempt:taxExempt
     })
     .eq('id',selected.id);
+
+  if(error){
+    console.error('Order financial update error:',error);
+    alert(`Could not save order financial settings: ${error.message}`);
+    return;
+  }
 
   await refreshOrder();
 }
