@@ -1729,42 +1729,6 @@ useEffect(()=>{
 ]);
 const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p.name,p.sku,p.vendor,p.category].some((v:any)=>(v||'').toLowerCase().includes(q))).slice(0,12):[];const physical=(o.order_items||[]).filter((i:any)=>i.item_type==='Product');const chosen=physical.filter((i:any)=>selectedIds.includes(i.id));const canPO=chosen.length>0&&chosen.every((i:any)=>i.vendor===chosen[0].vendor)&&!!chosen[0].vendor&&!!o.reference_number;const orderPOs=(purchaseOrders||[]).filter((po:any)=>po.order_id===o.id);const statuses=['Draft','Confirmed','Parts Ordering','Parts Ordered','Build Ready','Building','Ready for Installation','Completed'];function togglePOItem(i:any,checked:boolean){if(checked&&selectedIds.length){const first=physical.find((x:any)=>x.id===selectedIds[0]);if(first&&first.vendor!==i.vendor){alert('Select items from the same vendor for one PO.');return}}setSelectedIds(v=>checked?[...new Set([...v,i.id])]:v.filter(id=>id!==i.id))}return <><div className="row" style={{justifyContent:'space-between',alignItems:'flex-start'}}><div><h1>{o.order_number}</h1><div className="muted">{o.customers?.name}{o.reference_number?` • ${o.reference_number}`:''}</div></div><div className="row"><div className="field" style={{margin:0,minWidth:210}}><label>Order Status</label><select value={o.status} onChange={e=>updateOrderStatus(e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></div><button className="btn" onClick={()=>createBuild(o)}>+ Create Build</button><button className="btn secondary" onClick={openInvoice}>View Invoice</button></div></div><div className="panel" style={{marginTop:18}}><div className="grid"><div className="field" style={{margin:0}}><label>Reference #</label><div className="row"><input value={reference} onChange={e=>setReference(e.target.value)} placeholder="e.g. PO Mansell"/><button className="btn secondary" onClick={()=>updateReferenceNumber(reference)}>Save</button></div></div><div className="field" style={{margin:0}}><label>Shipping Address</label><div className="row"><textarea value={shipping} onChange={e=>setShipping(e.target.value)} placeholder="Shipping address for this order" rows={2} style={{width:'100%',resize:'vertical'}}/><button className="btn secondary" onClick={()=>updateShippingAddress(shipping)}>Save</button></div></div>
 
-  
-<div className="field" style={{margin:0}}>
-  <label>Tax Rate (%)</label>
-  <input
-    type="number"
-    step="0.01"
-    value={taxRate}
-    onChange={e=>setTaxRate(Number(e.target.value))}
-    onBlur={()=>updateOrderFinancials(taxRate,shippingAmount,taxExempt)}
-  />
-</div>
-
-<div className="field" style={{margin:0}}>
-  <label>Shipping ($)</label>
-  <input
-    type="number"
-    step="0.01"
-    value={shippingAmount}
-    onChange={e=>setShippingAmount(Number(e.target.value))}
-    onBlur={()=>updateOrderFinancials(taxRate,shippingAmount,taxExempt)}
-  />
-</div>
-
-<div className="field" style={{margin:0}}>
-  <label>Tax Exempt</label>
-  <input
-    type="checkbox"
-    checked={taxExempt}
-    onChange={e=>{
-      const checked=e.target.checked;
-      setTaxExempt(checked);
-      updateOrderFinancials(taxRate,shippingAmount,checked);
-    }}
-  />
-</div>
-
 </div></div><div className="panel" style={{marginTop:18}}>
   <div className="row" style={{justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
     <h2 style={{margin:0}}>Order Details</h2>
