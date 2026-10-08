@@ -785,7 +785,12 @@ const moduleNavItems:Record<string,string[]> = {
     'Products'
   ],
   Accounting: [
-    'Dashboard'
+    'Sales Accounting Overview',
+    'Payments',
+    'Outstanding Balances',
+    'Expenses',
+    'Vendor Bills',
+    'Financial Reports'
   ],
   Employees: [
     'Dashboard',
@@ -799,7 +804,7 @@ return <div className="shell">
     <img
       className="logo"
       src="/flatout-logo.svg"
-      onClick={()=>setTab('Dashboard')}
+      onClick={()=>setTab(module==='Accounting'?'Sales Accounting Overview':'Dashboard')}
       style={{cursor:'pointer'}}
     />
 
@@ -838,7 +843,7 @@ return <div className="shell">
           className={module===m?'btn':'btn secondary'}
           onClick={()=>{
             setModule(m);
-            setTab('Dashboard');
+            setTab(m==='Accounting'?'Sales Accounting Overview':'Dashboard');
             setSelected(null);
 
         
@@ -853,12 +858,16 @@ return <div className="shell">
 
     <div className="top"><div><b>{selected?(tab==='Invoice'?`${selected.order_number} — Invoice`:selected.order_number):selectedPO&&tab==='Purchase Order'?`${selectedPO.po_number} — Purchase Order`:tab}</b><div className="muted">Flatout Sim Racing ERP</div></div><div className="row"><span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
 {tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{orders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div><div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Sell</th><th>Margin</th></tr></thead><tbody>{orders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td>{o.order_number}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${t.sell.toLocaleString()}</td><td>{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
-{tab==='Dashboard'&&module==='Accounting'&&<div className="panel" style={{marginTop:16}}>
+{tab==='Sales Accounting Overview'&&module==='Accounting'&&<div className="panel" style={{marginTop:16}}>
   <h2>Sales Accounting Overview</h2>
   <p className="muted">Operational sales figures from confirmed orders. This is not a general ledger or tax report.</p>
   {(()=>{const confirmed=orders.filter(o=>o.status!=='Draft');const sales=confirmed.reduce((sum,o)=>{const t=totals(o);const tax=(o as any).tax_exempt?0:t.sell*Number(o.tax_rate||0)/100;return sum+t.sell+tax+Number((o as any).shipping_amount||0)},0);const payments=confirmed.reduce((sum,o)=>sum+(o.payments||[]).reduce((v,p)=>v+Number(p.amount||0),0)-(o.payment_adjustments||[]).reduce((v,a)=>v+Number(a.amount||0),0),0);const profit=confirmed.reduce((sum,o)=>sum+totals(o).gp,0);return <div className="cards"><div className="card"><div className="muted">Confirmed Order Value</div><div className="value">${sales.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div><div className="card"><div className="muted">Net Payments Recorded</div><div className="value">${payments.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div><div className="card"><div className="muted">Unpaid Balance</div><div className="value">${Math.max(0,sales-payments).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div><div className="card"><div className="muted">Estimated Gross Profit</div><div className="value">${profit.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div></div>})()}
   <p className="muted">Totals are all-time based on loaded records. Gross profit excludes tax, shipping, overhead, and other expenses; outstanding balances are not necessarily overdue invoices.</p>
 </div>}
+{module==='Accounting'&&['Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports'].includes(tab)&&<section className="panel">
+  <h2>{tab}</h2>
+  <p className="muted">This section is ready for development. No financial records have been changed.</p>
+</section>}
 {tab==='Employees'&&<section className="card">
   <div className="row" style={{justifyContent:'space-between'}}>
   <h2>Employees</h2>
