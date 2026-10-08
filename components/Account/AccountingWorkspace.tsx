@@ -30,7 +30,7 @@ export default function AccountingWorkspace({tab,openOrder}:{tab:Tab;openOrder:(
   }catch(e:any){setError(e.message||'Unable to load accounting records.');}finally{setBusy(false);}
  },[fetchAll]);
  useEffect(()=>{void refresh();},[refresh]);
- const sales=useMemo(()=>orders.filter(o=>o.status!=='Draft').map(o=>{
+ const sales=useMemo<Row[]>(()=>orders.filter(o=>o.status!=='Draft').map(o=>{
   const subtotal=(o.order_items||[]).reduce((s:number,i:Row)=>s+num(i.qty)*num(i.sell_price),0);
   const cost=(o.order_items||[]).reduce((s:number,i:Row)=>s+num(i.qty)*num(i.cost),0);
   const tax=o.tax_exempt?0:subtotal*num(o.tax_rate)/100;
