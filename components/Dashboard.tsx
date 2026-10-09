@@ -1,3 +1,4 @@
+```
 'use client';
 
 import AccountingWorkspace from './Account/AccountingWorkspace';
@@ -45,6 +46,7 @@ type Order={
   shipping_address:string|null,
   reference_number:string|null,
   created_at?:string,
+  order_date?:string|null,
   customers?:Customer,
   order_items?:Item[],
   payments?:Payment[],
@@ -549,9 +551,15 @@ async function updateOrderDetails(
   shippingAddress:string,
   taxRate:number,
   shippingAmount:number,
-  taxExempt:boolean
-){
-  if(!selected)return;
+  taxExempt:boolean,
+  orderDate:string
+):Promise<boolean>{
+
+  if(!selected)return false;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(orderDate)||Number.isNaN(Date.parse(orderDate+'T12:00:00'))){
+    alert('Enter a valid order date.');
+    return false;
+  }
 
   const {error}=await s
     .from('orders')
@@ -560,17 +568,19 @@ async function updateOrderDetails(
       shipping_address:shippingAddress.trim()||null,
       tax_rate:taxRate,
       shipping_amount:shippingAmount,
-      tax_exempt:taxExempt
+      tax_exempt:taxExempt,
+      order_date:orderDate
     })
     .eq('id',selected.id);
 
   if(error){
     console.error('Order details update error:',error);
     alert(`Could not save order details: ${error.message}`);
-    return;
+    return false;
   }
 
   await refreshOrder();
+  return true;
 }
 async function updateReferenceNumber(reference:string){if(!selected)return;await s.from('orders').update({reference_number:reference.trim()||null}).eq('id',selected.id);await refreshOrder()}
 async function updateOrderStatus(status:string){
@@ -1760,6 +1770,7 @@ function OrderView({o,products,totals,addProduct,addOther,openInvoice,dup,del,up
 [taxRate,setTaxRate]=useState(Number(o.tax_rate||0)),
 [shippingAmount,setShippingAmount]=useState(Number(o.shipping_amount||0)),
 [taxExempt,setTaxExempt]=useState(Boolean(o.tax_exempt)),
+[orderDate,setOrderDate]=useState(String(o.order_date||o.created_at?.slice(0,10)||'')),
 [editingOrderDetails,setEditingOrderDetails]=useState(false),
 [selectedIds,setSelectedIds]=useState<string[]>([]),
 [note,setNote]=useState('');
@@ -1770,6 +1781,7 @@ useEffect(()=>{
   setTaxRate(Number(o.tax_rate||0));
   setShippingAmount(Number(o.shipping_amount||0));
   setTaxExempt(Boolean(o.tax_exempt));
+  setOrderDate(String(o.order_date||o.created_at?.slice(0,10)||''));
   setSelectedIds([]);
 },[
   o.id,
@@ -1777,7 +1789,9 @@ useEffect(()=>{
   o.reference_number,
   o.tax_rate,
   o.shipping_amount,
-  o.tax_exempt
+  o.tax_exempt,
+  o.order_date,
+  o.created_at
 ]);
 const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p.name,p.sku,p.vendor,p.category].some((v:any)=>(v||'').toLowerCase().includes(q))).slice(0,12):[];const physical=(o.order_items||[]).filter((i:any)=>i.item_type==='Product');const chosen=physical.filter((i:any)=>selectedIds.includes(i.id));const canPO=chosen.length>0&&chosen.every((i:any)=>i.vendor===chosen[0].vendor)&&!!chosen[0].vendor&&!!o.reference_number;const orderPOs=(purchaseOrders||[]).filter((po:any)=>po.order_id===o.id);const statuses=['Draft','Confirmed','Parts Ordering','Parts Ordered','Build Ready','Building','Ready for Installation','Completed'];function togglePOItem(i:any,checked:boolean){if(checked&&selectedIds.length){const first=physical.find((x:any)=>x.id===selectedIds[0]);if(first&&first.vendor!==i.vendor){alert('Select items from the same vendor for one PO.');return}}setSelectedIds(v=>checked?[...new Set([...v,i.id])]:v.filter(id=>id!==i.id))}return <><div className="row" style={{justifyContent:'space-between',alignItems:'flex-start'}}><div><h1>{o.order_number}</h1><div className="muted">{o.customers?.name}{o.reference_number?` • ${o.reference_number}`:''}</div></div><div className="row"><div className="field" style={{margin:0,minWidth:210}}><label>Order Status</label><select value={o.status} onChange={e=>updateOrderStatus(e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></div>{o.status!=='Draft'&&<button className="btn" onClick={()=>createBuild(o)}>+ Create Build</button>}{o.status!=='Draft'&&<button className="btn secondary" onClick={openInvoice}>View Invoice</button>}</div></div><div className="panel" style={{marginTop:18}}><div className="grid"><div className="field" style={{margin:0}}><label>Reference #</label><div className="row"><input value={reference} onChange={e=>setReference(e.target.value)} placeholder="e.g. PO Mansell"/><button className="btn secondary" onClick={()=>updateReferenceNumber(reference)}>Save</button></div></div><div className="field" style={{margin:0}}><label>Shipping Address</label><div className="row"><textarea value={shipping} onChange={e=>setShipping(e.target.value)} placeholder="Shipping address for this order" rows={2} style={{width:'100%',resize:'vertical'}}/><button className="btn secondary" onClick={()=>updateShippingAddress(shipping)}>Save</button></div></div>
 
@@ -1802,6 +1816,7 @@ const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p
             setTaxRate(Number(o.tax_rate||0));
             setShippingAmount(Number(o.shipping_amount||0));
             setTaxExempt(Boolean(o.tax_exempt));
+            setOrderDate(String(o.order_date||o.created_at?.slice(0,10)||''));
             setEditingOrderDetails(false);
           }}
         >
@@ -1811,14 +1826,15 @@ const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p
         <button
           className="btn"
           onClick={async()=>{
-            await updateOrderDetails(
+            const saved=await updateOrderDetails(
               reference,
               shipping,
               taxRate,
               shippingAmount,
-              taxExempt
+              taxExempt,
+              orderDate
             );
-            setEditingOrderDetails(false);
+            if(saved)setEditingOrderDetails(false);
           }}
         >
           Save Changes
@@ -1828,6 +1844,15 @@ const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p
   </div>
 
 <div className="grid">
+    <div className="field" style={{margin:0}}>
+      <label>Order Date</label>
+      {editingOrderDetails ? (
+        <input type="date" value={orderDate} onChange={e=>setOrderDate(e.target.value)} required />
+      ) : (
+        <div>{o.order_date||o.created_at?.slice(0,10)||'—'}</div>
+      )}
+      <div className="muted">Original ERP creation timestamp is preserved.</div>
+    </div>
     <div className="field" style={{margin:0}}>
       <label>Reference #</label>
       {editingOrderDetails ? (
@@ -1908,10 +1933,11 @@ const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p
   <div className="cards" style={{marginTop:18}}><div className="card"><div className="muted">Sell</div><div className="value">${totals.sell.toLocaleString()}</div></div><div className="card"><div className="muted">Cost</div><div className="value">${totals.cost.toLocaleString()}</div></div><div className="card"><div className="muted">Gross Profit</div><div className="value">${totals.gp.toLocaleString()}</div></div><div className="card"><div className="muted">Gross Margin</div><div className="value">{totals.gm.toFixed(1)}%</div></div></div><div className="row" style={{gap:8,margin:'18px 0'}}>{(o.status==='Draft'?['Order Items']:['Order Items','Purchasing','Purchase Orders','Payments']).map(x=><button key={x} className={section===x?'btn':'btn secondary'} onClick={()=>setSection(x)}>{x}{x==='Purchase Orders'&&orderPOs.length?` (${orderPOs.length})`:''}</button>)}</div>{section==='Order Items'&&<><div className="row" style={{justifyContent:'space-between',marginBottom:12}}><h2 style={{margin:0}}>Order Items</h2><div className="row"><div style={{position:'relative',minWidth:330}}><input value={productSearch} onChange={e=>{setProductSearch(e.target.value);setPid('')}} placeholder="Search product, SKU, vendor or category..." style={{width:'100%'}}/>{q&&matches.length>0&&!pid&&<div style={{position:'absolute',zIndex:20,top:'100%',left:0,right:0,background:'#fff',border:'1px solid #dce0d9',maxHeight:300,overflowY:'auto',boxShadow:'0 8px 20px rgba(0,0,0,.12)'}}>{matches.map((p:any)=><button type="button" key={p.id} onClick={()=>{setPid(p.id);setProductSearch(p.name)}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',background:'#fff',border:0,borderBottom:'1px solid #eee',cursor:'pointer'}}><b>{p.name}</b><div className="muted">{[p.sku,p.vendor,p.category].filter(Boolean).join(' • ')}</div></button>)}</div>}</div><button className="btn" disabled={!pid} onClick={()=>{if(pid){addProduct(pid);setPid('');setProductSearch('')}}}>+ Add Product</button><button className="btn secondary" onClick={addOther}>+ Labor / Other</button></div></div><div className="panel"><table><thead><tr><th>Item</th><th>Type</th><th>Qty</th><th>Sell</th><th>Cost</th><th>Status</th><th>Actions</th></tr></thead><tbody>{(o.order_items||[]).map((i:any)=><tr key={i.id}><td><b>{i.description}</b><div className="muted">{i.vendor}</div></td><td>{i.item_type}</td><td><input style={{width:60}} defaultValue={i.qty} onBlur={e=>updateItem(i,'qty',Number(e.target.value))}/></td><td><input style={{width:100}} defaultValue={i.sell_price} onBlur={e=>updateItem(i,'sell_price',Number(e.target.value))}/></td><td><input style={{width:100}} defaultValue={i.cost??''} placeholder="—" onBlur={e=>updateItem(i,'cost',e.target.value===''?null:Number(e.target.value))}/></td><td>{i.item_type==='Product'?<select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select>:'—'}</td><td><div className="row"><button className="btn ghost" onClick={()=>dup(i)}>Duplicate</button><button className="btn ghost" onClick={()=>del(i)}>Remove</button></div></td></tr>)}</tbody></table></div></>}{section==='Purchasing'&&<><div className="row" style={{justifyContent:'space-between',marginBottom:12}}><div><h2 style={{margin:0}}>Purchasing</h2><div className="muted">Manage parts for this Sales Order and create vendor POs here.</div></div>{selectedIds.length>0&&<div className="row"><span className="muted">{chosen.length} selected • {chosen[0]?.vendor||'Vendor required'}</span><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(o,chosen);setSelectedIds([])}}>Create PO</button></div>}</div>{!o.reference_number&&<div className="panel"><b>Reference # required for Purchase Orders.</b><div className="muted">Add a Reference # above before creating a vendor PO.</div></div>}<div className="panel"><table><thead><tr><th></th><th>Part</th><th>SKU</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Tracking</th></tr></thead><tbody>{physical.map((i:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>togglePOItem(i,e.target.checked)}/></td><td><b>{i.description}</b></td><td>{i.sku||'—'}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><td><input key={`${i.id}-${i.tracking||''}`} defaultValue={i.tracking||''} placeholder="Tracking #" onBlur={e=>{if(e.target.value!==(i.tracking||''))updateItem(i,'tracking',e.target.value||null)}} style={{minWidth:170}}/></td></tr>)}{physical.length===0&&<tr><td colSpan={7} className="muted">No physical products on this order.</td></tr>}</tbody></table></div></>}{section==='Purchase Orders'&&<div className="panel"><h2>Purchase Orders</h2><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{orderPOs.map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{orderPOs.length===0&&<tr><td colSpan={5} className="muted">No Purchase Orders have been created for this Sales Order yet.</td></tr>}</tbody></table></div>}{section==='Payments'&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><h2>Payments</h2><div className="muted">Payment status: {o.payment_status}</div></div><button className="btn" onClick={openInvoice}>Open Invoice / Record Payment</button></div><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th>Amount</th></tr></thead><tbody>{(o.payments||[]).map((p:any)=><tr key={p.id}><td>{new Date(p.paid_at).toLocaleDateString()}</td><td>{p.payment_method||'—'}</td><td>{p.reference||'—'}</td><td>{p.notes||'—'}</td><td>${Number(p.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>)}{!(o.payments||[]).length&&<tr><td colSpan={5} className="muted">No payments recorded yet.</td></tr>}</tbody></table></div>}<div className="panel" style={{marginTop:18}}><h2>Order Notes</h2><div style={{maxHeight:320,overflowY:'auto',marginBottom:18}}>{[...(o.order_notes||[])].sort((a:any,b:any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()).map((n:any)=><div key={n.id} style={{padding:'12px 0',borderBottom:'1px solid #eee'}}><div style={{whiteSpace:'pre-line'}}>{n.note}</div><div className="muted" style={{marginTop:5}}>{new Date(n.created_at).toLocaleString()}</div></div>)}{!(o.order_notes||[]).length&&<div className="muted">No order notes yet.</div>}</div><div className="field"><label>Add Order Note</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} placeholder="Backorder, ETA, vendor update, customer update, installation note, etc."/></div><button className="btn" disabled={!note.trim()} onClick={async()=>{await addOrderNote(note);setNote('')}}>Add Note</button></div>
 </>  
   }
-function InvoiceView({o,totals,back,addPayment,adjustPayment}:any){const tax=o.tax_exempt?0:totals.sell*Number(o.tax_rate||0)/100,total=totals.sell+tax+Number(o.shipping_amount||0),paid=(o.payments||[]).reduce((a:number,p:any)=>a+Number(p.amount),0)-(o.payment_adjustments||[]).reduce((a:number,x:any)=>a+Number(x.amount),0),balance=Math.max(0,total-paid);return <><div className="invoice-actions row"><button className="btn ghost" onClick={back}>← Back to Order</button><button className="btn secondary" onClick={()=>window.print()}>Print / Save PDF</button><button className="btn" onClick={addPayment}>+ Record Payment</button></div><div className="invoice-sheet"><div className="invoice-head"><div><img src="/flatout-logo.svg"/><div style={{marginTop:10,lineHeight:1.45}}><b>Flatout Sim Racing</b><div>1388 S 300 W</div><div>Suite 100</div><div>Salt Lake City, UT 84115</div><div>info@driveflatout.com</div></div></div><div className="invoice-title"><h1>INVOICE</h1><div><b>{o.order_number}</b></div>{o.reference_number&&<div>Reference: {o.reference_number}</div>}<div className="muted">Status: {o.payment_status}</div></div></div><div className="invoice-meta"><div><div className="invoice-label">BILL TO</div><b>{o.customers?.name}</b>{o.customers?.company&&<div>{o.customers.company}</div>}{o.customers?.email&&<div>{o.customers.email}</div>}{o.customers?.phone&&<div>{o.customers.phone}</div>}{o.customers?.billing_address&&<div>{o.customers.billing_address}</div>}</div>{o.shipping_address&&<div><div className="invoice-label">SHIP TO</div><div style={{whiteSpace:'pre-line'}}>{o.shipping_address}</div></div>}<div><div className="invoice-label">INVOICE DATE</div><div>{new Date(o.created_at||Date.now()).toLocaleDateString()}</div></div></div><table className="invoice-table"><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead><tbody>{(o.order_items||[]).map((i:any)=><tr key={i.id}><td><b>{i.description}</b>{i.sku&&<div className="muted">SKU: {i.sku}</div>}</td><td>{Number(i.qty)}</td><td>${Number(i.sell_price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>${(Number(i.qty)*Number(i.sell_price)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>)}</tbody></table><div className="invoice-summary"><div><span>Subtotal</span><b>${totals.sell.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div><span>Tax ({Number(o.tax_rate||0).toFixed(2)}%)</span><b>${tax.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div className="invoice-total"><span>Total</span><b>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div><span>Net Paid (after refunds/voids)</span><b>${paid.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div className="invoice-balance"><span>Balance Due</span><b>${balance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div></div>{(o.payments||[]).length>0&&<div className="payment-history"><h2>Payments</h2><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th><th>Action</th></tr></thead><tbody>{o.payments.map((p:any)=><tr key={p.id}><td>{new Date(p.paid_at).toLocaleDateString()}</td><td>{p.payment_method||'—'}</td><td>{p.reference||'—'}</td><td>${Number(p.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td><button type="button" className="btn secondary" onClick={()=>adjustPayment(p)}>Refund / Void</button></td></tr>)}</tbody></table>{(o.payment_adjustments||[]).length>0&&<><h3>Refunds and Voids (ERP records only)</h3><table><thead><tr><th>Date</th><th>Type</th><th>Reason</th><th>Square Reference</th><th>Amount</th></tr></thead><tbody>{(o.payment_adjustments||[]).map((a:any)=><tr key={a.id}><td>{new Date(a.created_at).toLocaleDateString()}</td><td>{a.adjustment_type}</td><td>{a.reason}</td><td>{a.square_reference||'—'}</td><td>-${Number(a.amount).toFixed(2)}</td></tr>)}</tbody></table></>}</div>}<div className="invoice-footer">Thank you for choosing Flatout Sim Racing.</div></div></>}
+function InvoiceView({o,totals,back,addPayment,adjustPayment}:any){const tax=o.tax_exempt?0:totals.sell*Number(o.tax_rate||0)/100,total=totals.sell+tax+Number(o.shipping_amount||0),paid=(o.payments||[]).reduce((a:number,p:any)=>a+Number(p.amount),0)-(o.payment_adjustments||[]).reduce((a:number,x:any)=>a+Number(x.amount),0),balance=Math.max(0,total-paid);return <><div className="invoice-actions row"><button className="btn ghost" onClick={back}>← Back to Order</button><button className="btn secondary" onClick={()=>window.print()}>Print / Save PDF</button><button className="btn" onClick={addPayment}>+ Record Payment</button></div><div className="invoice-sheet"><div className="invoice-head"><div><img src="/flatout-logo.svg"/><div style={{marginTop:10,lineHeight:1.45}}><b>Flatout Sim Racing</b><div>1388 S 300 W</div><div>Suite 100</div><div>Salt Lake City, UT 84115</div><div>info@driveflatout.com</div></div></div><div className="invoice-title"><h1>INVOICE</h1><div><b>{o.order_number}</b></div>{o.reference_number&&<div>Reference: {o.reference_number}</div>}<div className="muted">Status: {o.payment_status}</div></div></div><div className="invoice-meta"><div><div className="invoice-label">BILL TO</div><b>{o.customers?.name}</b>{o.customers?.company&&<div>{o.customers.company}</div>}{o.customers?.email&&<div>{o.customers.email}</div>}{o.customers?.phone&&<div>{o.customers.phone}</div>}{o.customers?.billing_address&&<div>{o.customers.billing_address}</div>}</div>{o.shipping_address&&<div><div className="invoice-label">SHIP TO</div><div style={{whiteSpace:'pre-line'}}>{o.shipping_address}</div></div>}<div><div className="invoice-label">INVOICE DATE</div><div>{String(o.order_date||o.created_at?.slice(0,10)||'—')}</div></div></div><table className="invoice-table"><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead><tbody>{(o.order_items||[]).map((i:any)=><tr key={i.id}><td><b>{i.description}</b>{i.sku&&<div className="muted">SKU: {i.sku}</div>}</td><td>{Number(i.qty)}</td><td>${Number(i.sell_price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>${(Number(i.qty)*Number(i.sell_price)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>)}</tbody></table><div className="invoice-summary"><div><span>Subtotal</span><b>${totals.sell.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div><span>Tax ({Number(o.tax_rate||0).toFixed(2)}%)</span><b>${tax.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div className="invoice-total"><span>Total</span><b>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div><span>Net Paid (after refunds/voids)</span><b>${paid.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div><div className="invoice-balance"><span>Balance Due</span><b>${balance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div></div>{(o.payments||[]).length>0&&<div className="payment-history"><h2>Payments</h2><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th><th>Action</th></tr></thead><tbody>{o.payments.map((p:any)=><tr key={p.id}><td>{new Date(p.paid_at).toLocaleDateString()}</td><td>{p.payment_method||'—'}</td><td>{p.reference||'—'}</td><td>${Number(p.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td><button type="button" className="btn secondary" onClick={()=>adjustPayment(p)}>Refund / Void</button></td></tr>)}</tbody></table>{(o.payment_adjustments||[]).length>0&&<><h3>Refunds and Voids (ERP records only)</h3><table><thead><tr><th>Date</th><th>Type</th><th>Reason</th><th>Square Reference</th><th>Amount</th></tr></thead><tbody>{(o.payment_adjustments||[]).map((a:any)=><tr key={a.id}><td>{new Date(a.created_at).toLocaleDateString()}</td><td>{a.adjustment_type}</td><td>{a.reason}</td><td>{a.square_reference||'—'}</td><td>-${Number(a.amount).toFixed(2)}</td></tr>)}</tbody></table></>}</div>}<div className="invoice-footer">Thank you for choosing Flatout Sim Racing.</div></div></>}
 
 function PaymentAdjustmentForm({payment,adjustments,submit}:any){
  const remaining=Math.max(0,Math.round((Number(payment.amount)-(adjustments||[]).reduce((v:number,a:any)=>v+Number(a.amount),0))*100)/100);
  const [kind,setKind]=useState('Refund');
  return <form action={submit}><h2>Record Refund / Void</h2><p className="muted">Record only after completing the action in Square. This form does not process money.</p><p>Original payment: ${Number(payment.amount).toFixed(2)} | Remaining: ${remaining.toFixed(2)}</p><div className="field"><label>Type</label><select name="adjustment_type" value={kind} onChange={e=>setKind(e.target.value)}><option>Refund</option><option disabled={remaining!==Number(payment.amount)}>Void</option></select></div><div className="field"><label>Amount</label><input name="amount" type="number" step="0.01" min="0.01" max={remaining} defaultValue={remaining.toFixed(2)} disabled={kind==='Void'} required/></div><div className="field"><label>Reason</label><input name="reason" required placeholder="Why was this refunded or voided?"/></div><div className="field"><label>Square transaction / refund reference (optional)</label><input name="square_reference"/></div><button className="btn" disabled={remaining<=0}>Record {kind} in ERP</button></form>
 }
+```
