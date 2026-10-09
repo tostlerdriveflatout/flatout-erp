@@ -73,6 +73,19 @@ export default function AccountingWorkspace({tab,openOrder}:{tab:Tab;openOrder:(
       orderCount:periodSales.length
     };
   },[sales,expenses,bills,reportBounds.start,reportBounds.end]);
+  // Category totals follow the same inclusive reporting dates as the financial summary.
+  // Only recorded expenses count; voided expenses remain in history but not in totals.
+  const expenseCategoryTotals=useMemo(()=>{
+    const inRange=(value:any)=>{const date=String(value||'').slice(0,10);return Boolean(date)&&(!reportBounds.start||date>=reportBounds.start)&&(!reportBounds.end||date<=reportBounds.end);};
+    const totals=new Map<string,{count:number,amount:number}>();
+    for(const expense of expenses){
+      if(expense.status!=='Recorded'||!inRange(expense.expense_date))continue;
+      const category=String(expense.category||'Uncategorized').trim()||'Uncategorized';
+      const previous=totals.get(category)||{count:0,amount:0};
+      totals.set(category,{count:previous.count+1,amount:previous.amount+num(expense.amount)});
+    }
+    return [...totals.entries()].map(([category,values])=>({category,...values})).sort((a,b)=>b.amount-a.amount||a.category.localeCompare(b.category));
+  },[expenses,reportBounds.start,reportBounds.end]);
  const filteredSales=sales.filter(o=>[o.order_number,o.customers?.name].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase())));
  const filteredExpenses=expenses.filter(e=>[e.vendor,e.description,e.category].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase())));
  const filteredBills=bills.filter(b=>[b.vendor,b.bill_number].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase())));
@@ -112,6 +125,10 @@ export default function AccountingWorkspace({tab,openOrder}:{tab:Tab;openOrder:(
     </div>
     <p className="muted">{reportBounds.start||'Beginning'} through {reportBounds.end||'latest available'} · Dates are inclusive</p>
     {!reportRangeValid?<p role="alert" style={{color:'#ff8b8b'}}>The start date must not be after the end date.</p>:<>{table(['Metric','Amount'],[['Sales subtotal (excluding tax and shipping)',reportSums.salesSubtotal],['Estimated item costs',reportSums.estimatedCost],['Estimated product gross profit',reportSums.salesSubtotal-reportSums.estimatedCost],['Recorded operating expenses',reportSums.expenses],['Illustrative margin after expenses',reportSums.salesSubtotal-reportSums.estimatedCost-reportSums.expenses],['Open vendor bills dated in period',reportSums.billTotal],['Active vendor payments dated in period',reportSums.billPaid]].map(([name,value])=><tr key={String(name)}><td>{name}</td><td>{money(Number(value))}</td></tr>),'No data') }<p className="muted">{reportSums.orderCount} confirmed orders created in this period. Sales and estimated costs are assigned to the order creation date, not the payment or fulfillment date. Expenses use expense date; open vendor bills use bill date; active vendor payments use paid date, including payments on bills from other periods. Reversed payments are excluded based on current reversal status.</p></>}
+     {reportRangeValid&&<><h3>Operating expenses by category</h3>
+       {table(['Category','Recorded expenses','Total amount'],expenseCategoryTotals.map(item=><tr key={item.category}><td>{item.category}</td><td>{item.count}</td><td>{money(item.amount)}</td></tr>).concat(expenseCategoryTotals.length?[<tr key="category-total"><td><strong>Total operating expenses</strong></td><td><strong>{expenseCategoryTotals.reduce((sum,item)=>sum+item.count,0)}</strong></td><td><strong>{money(expenseCategoryTotals.reduce((sum,item)=>sum+item.amount,0))}</strong></td></tr>]:[]),'No recorded expenses in this reporting period.')}
+       <p className="muted">Only recorded (not voided) expenses dated within the selected period are included. Categories reflect the expense records as saved.</p>
+     </>}
     <p className="muted">Illustrative margin is not net income or a formal period Profit &amp; Loss statement. Vendor bills may overlap order item costs or recorded expenses and are not subtracted again. Inventory recognition, tax liability, historical as-of balances, and posted double-entry accounting require a later reconciliation phase.</p></>}
  </section>;
 }
