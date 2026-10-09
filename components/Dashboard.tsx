@@ -1,6 +1,6 @@
 'use client';
 
-import AccountingWorkspace from './account/AccountingWorkspace';
+import AccountingWorkspace from './Account/AccountingWorkspace';
 import {useEffect,useMemo,useState} from 'react';
 import {supabase} from '@/lib/supabase-browser';
 import {useRouter} from 'next/navigation';
