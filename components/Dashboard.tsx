@@ -1,5 +1,9 @@
+'use client';
+
 import AccountingWorkspace from './accounting/AccountingWorkspace';
-'use client';import {useEffect,useMemo,useState} from 'react';import {supabase} from '@/lib/supabase-browser';import {useRouter} from 'next/navigation';
+import {useEffect,useMemo,useState} from 'react';
+import {supabase} from '@/lib/supabase-browser';
+import {useRouter} from 'next/navigation';
 type Customer={
   id:string,
   name:string,
