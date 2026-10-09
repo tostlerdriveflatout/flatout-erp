@@ -1,4 +1,3 @@
-```
 'use client';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {supabase} from '@/lib/supabase-browser';
@@ -116,4 +115,3 @@ export default function AccountingWorkspace({tab,openOrder}:{tab:Tab;openOrder:(
     <p className="muted">Illustrative margin is not net income or a formal period Profit &amp; Loss statement. Vendor bills may overlap order item costs or recorded expenses and are not subtracted again. Inventory recognition, tax liability, historical as-of balances, and posted double-entry accounting require a later reconciliation phase.</p></>}
  </section>;
 }
-```
