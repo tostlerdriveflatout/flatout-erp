@@ -92,6 +92,7 @@ const [products,setProducts]=useState<Product[]>([]);
 const [orders,setOrders]=useState<Order[]>([]);
  const [adjustmentPayment,setAdjustmentPayment]=useState<Payment|null>(null);
  const paymentSubmissionInProgress=useRef(false);
+ const adjustmentSubmissionInProgress=useRef(false);
 const [purchaseOrders,setPurchaseOrders]=useState<PurchaseOrder[]>([]);
 
 const [selected,setSelected]=useState<Order|null>(null);
@@ -664,16 +665,53 @@ async function addPayment(fd:FormData){
   }finally{paymentSubmissionInProgress.current=false;}
 }
  async function recordAdjustment(fd:FormData){
-   if(!selected||!adjustmentPayment)return;
+   if(!selected||!adjustmentPayment||adjustmentSubmissionInProgress.current)return;
+   const orderId=selected.id;
+   const paymentId=adjustmentPayment.id;
    const kind=String(fd.get('adjustment_type'));
    const amount=kind==='Void'?Number(adjustmentPayment.amount):Number(fd.get('amount'));
    const reason=String(fd.get('reason')||'').trim();
    const squareReference=String(fd.get('square_reference')||'').trim();
-   if(!['Refund','Void'].includes(kind)||!Number.isFinite(amount)||amount<=0||!reason){alert('Enter a valid adjustment and reason.');return;}
+   if(!['Refund','Void'].includes(kind)||!Number.isFinite(amount)||amount<=0||Math.abs(amount*100-Math.round(amount*100))>0.000001||!reason){
+     alert('Enter a valid adjustment amount in dollars and cents and a reason.');
+     return;
+   }
    if(!confirm(`Record ${kind.toLowerCase()} of $${amount.toFixed(2)}? This only updates the ERP, not Square.`))return;
-   const {error}=await s.rpc('record_payment_adjustment',{p_payment_id:adjustmentPayment.id,p_adjustment_type:kind,p_amount:amount,p_reason:reason,p_square_reference:squareReference||null});
-   if(error){alert(`Adjustment not saved: ${error.message}`);return;}
-   setModal('');setAdjustmentPayment(null);await refreshOrder();
+   adjustmentSubmissionInProgress.current=true;
+   try{
+     const {error}=await s.rpc('record_payment_adjustment',{
+       p_payment_id:paymentId,
+       p_adjustment_type:kind,
+       p_amount:Math.round(amount*100)/100,
+       p_reason:reason,
+       p_square_reference:squareReference||null
+     });
+     if(error){alert(`Adjustment not saved: ${error.message}`);return;}
+
+     // The adjustment has been recorded. Recalculate the invoice's status from fresh data.
+     const {data:updated,error:readError}=await s.from('orders')
+       .select('*,order_items(*),payments(*),payment_adjustments(*)')
+       .eq('id',orderId).single();
+     if(readError||!updated){
+       alert('Adjustment recorded, but the payment status could not be refreshed. Please reload the invoice.');
+     }else{
+       const subtotal=(updated.order_items||[]).reduce((sum:number,item:any)=>sum+Number(item.qty)*Number(item.sell_price),0);
+       const totalCents=Math.round((subtotal+(updated.tax_exempt?0:subtotal*Number(updated.tax_rate||0)/100)+Number(updated.shipping_amount||0))*100);
+       const paidCents=(updated.payments||[]).reduce((sum:number,p:any)=>sum+Math.round(Number(p.amount)*100),0)
+         -(updated.payment_adjustments||[]).reduce((sum:number,x:any)=>sum+Math.round(Number(x.amount)*100),0);
+       const status=paidCents>=totalCents?'Paid':paidCents>0?'Partially Paid':'Invoiced';
+       const {error:statusError}=await s.from('orders').update({payment_status:status}).eq('id',orderId);
+       if(statusError)alert(`Adjustment recorded, but payment status could not be updated: ${statusError.message}`);
+     }
+     setModal('');
+     setAdjustmentPayment(null);
+     await refreshOrder();
+   }catch(error){
+     console.error('Payment adjustment error:',error);
+     alert('Could not confirm the adjustment result. Refresh the invoice before attempting again to avoid a duplicate.');
+   }finally{
+     adjustmentSubmissionInProgress.current=false;
+   }
  }
 async function createBuild(order:any){
   const existing=builds.filter(b=>b.order_id===order.id);
