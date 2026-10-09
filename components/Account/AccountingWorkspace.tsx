@@ -86,6 +86,10 @@ export default function AccountingWorkspace({tab,openOrder}:{tab:Tab;openOrder:(
     }
     return [...totals.entries()].map(([category,values])=>({category,...values})).sort((a,b)=>b.amount-a.amount||a.category.localeCompare(b.category));
   },[expenses,reportBounds.start,reportBounds.end]);
+  const profitabilityOrders=useMemo(()=>{
+    const inRange=(value:any)=>{const date=String(value||'').slice(0,10);return Boolean(date)&&(!reportBounds.start||date>=reportBounds.start)&&(!reportBounds.end||date<=reportBounds.end);};
+    return sales.filter(o=>inRange(o.created_at)).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  },[sales,reportBounds.start,reportBounds.end]);
  const filteredSales=sales.filter(o=>[o.order_number,o.customers?.name].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase())));
  const filteredExpenses=expenses.filter(e=>[e.vendor,e.description,e.category].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase())));
  const filteredBills=bills.filter(b=>[b.vendor,b.bill_number].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase())));
@@ -125,7 +129,10 @@ export default function AccountingWorkspace({tab,openOrder}:{tab:Tab;openOrder:(
     </div>
     <p className="muted">{reportBounds.start||'Beginning'} through {reportBounds.end||'latest available'} · Dates are inclusive</p>
     {!reportRangeValid?<p role="alert" style={{color:'#ff8b8b'}}>The start date must not be after the end date.</p>:<>{table(['Metric','Amount'],[['Sales subtotal (excluding tax and shipping)',reportSums.salesSubtotal],['Estimated item costs',reportSums.estimatedCost],['Estimated product gross profit',reportSums.salesSubtotal-reportSums.estimatedCost],['Recorded operating expenses',reportSums.expenses],['Illustrative margin after expenses',reportSums.salesSubtotal-reportSums.estimatedCost-reportSums.expenses],['Open vendor bills dated in period',reportSums.billTotal],['Active vendor payments dated in period',reportSums.billPaid]].map(([name,value])=><tr key={String(name)}><td>{name}</td><td>{money(Number(value))}</td></tr>),'No data') }<p className="muted">{reportSums.orderCount} confirmed orders created in this period. Sales and estimated costs are assigned to the order creation date, not the payment or fulfillment date. Expenses use expense date; open vendor bills use bill date; active vendor payments use paid date, including payments on bills from other periods. Reversed payments are excluded based on current reversal status.</p></>}
-     {reportRangeValid&&<><h3>Operating expenses by category</h3>
+     {reportRangeValid&&<><h3>Sales order profitability</h3>
+       <p className="muted">Orders created in the selected reporting period. Revenue and estimated costs exclude tax and shipping. Profit is an estimate before operating expenses, payment fees, and any unallocated build labor. Payment status is based on recorded net payments.</p>
+       {table(['Order','Customer','Date','Revenue','Estimated cost','Gross profit','Margin','Net paid','Balance','Payment status','Action'],profitabilityOrders.map(o=>{const profit=o.subtotal-o.cost;const margin=o.subtotal>0?profit/o.subtotal*100:null;const paymentStatus=o.balance<=.005?'Paid':o.paid>.005?'Partially paid':'Unpaid';return <tr key={o.id}><td>{o.order_number}</td><td>{o.customers?.name||'—'}</td><td>{String(o.created_at||'').slice(0,10)}</td><td>{money(o.subtotal)}</td><td>{money(o.cost)}</td><td>{money(profit)}</td><td>{margin===null?'—':`${margin.toFixed(1)}%`}</td><td>{money(o.paid)}</td><td>{money(o.balance)}</td><td>{paymentStatus}</td><td><button className="btn secondary" onClick={()=>openOrder(o.id)}>Open order</button></td></tr>;}),'No confirmed sales orders in this reporting period.')}
+       <h3>Operating expenses by category</h3>
        {table(['Category','Recorded expenses','Total amount'],expenseCategoryTotals.map(item=><tr key={item.category}><td>{item.category}</td><td>{item.count}</td><td>{money(item.amount)}</td></tr>).concat(expenseCategoryTotals.length?[<tr key="category-total"><td><strong>Total operating expenses</strong></td><td><strong>{expenseCategoryTotals.reduce((sum,item)=>sum+item.count,0)}</strong></td><td><strong>{money(expenseCategoryTotals.reduce((sum,item)=>sum+item.amount,0))}</strong></td></tr>]:[]),'No recorded expenses in this reporting period.')}
        <p className="muted">Only recorded (not voided) expenses dated within the selected period are included. Categories reflect the expense records as saved.</p>
      </>}
