@@ -1360,22 +1360,28 @@ onChange={e=>{
     <table>
       <tbody>
         {customers.map(c=>
-          <tr key={c.id}>
+          <tr
+            key={c.id}
+            onClick={()=>{
+              setEditingCustomer(c);
+              setModal('viewCustomer');
+            }}
+            onKeyDown={e=>{
+              if(e.key==='Enter' || e.key===' '){
+                e.preventDefault();
+                setEditingCustomer(c);
+                setModal('viewCustomer');
+              }
+            }}
+            tabIndex={0}
+            aria-label={`View customer ${c.name}`}
+            style={{cursor:'pointer'}}
+          >
             <td><b>{c.name}</b></td>
             <td>{c.company}</td>
             <td>{c.email}</td>
             <td>{c.phone}</td>
-            <td>
-              <button
-                className="btn secondary"
-                onClick={()=>{
-                  setEditingCustomer(c);
-                  setModal('editCustomer');
-                }}
-              >
-                Edit
-              </button>
-            </td>
+            <td><span className="muted">View →</span></td>
           </tr>
         )}
       </tbody>
@@ -1689,7 +1695,44 @@ onChange={e=>{
       Cancel
     </button>
   </div>
-</form>}{modal==='customer'&&<form action={createCustomer}><h2>New Customer</h2><div className="grid">{['name','company','email','phone'].map(n=><div className="field" key={n}><label>{n}</label><input name={n} required={n==='name'}/></div>)}</div><button className="btn">Create Customer</button></form>} {modal==='editCustomer'&&editingCustomer&&
+</form>}{modal==='customer'&&<form action={createCustomer}><h2>New Customer</h2><div className="grid">{['name','company','email','phone'].map(n=><div className="field" key={n}><label>{n}</label><input name={n} required={n==='name'}/></div>)}</div><button className="btn">Create Customer</button></form>} {modal==='viewCustomer'&&editingCustomer&&
+<div>
+  <div className="row" style={{justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+    <h2 style={{margin:0}}>Customer Details</h2>
+    <button type="button" className="btn" onClick={()=>setModal('editCustomer')}>
+      Edit Customer
+    </button>
+  </div>
+  <div className="grid">
+    {([
+      ['Name',editingCustomer.name],
+      ['Company',editingCustomer.company],
+      ['Email',editingCustomer.email],
+      ['Phone',editingCustomer.phone],
+      ['Billing Address',editingCustomer.billing_address],
+      ['Shipping Address',editingCustomer.shipping_address]
+    ] as [string,string|null|undefined][]).map(([label,value])=>
+      <div className="field" key={label}>
+        <label>{label}</label>
+        <div style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:'8px 0'}}>
+          {value || '—'}
+        </div>
+      </div>
+    )}
+  </div>
+  <div className="field">
+    <label>Customer Notes</label>
+    <div style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:'8px 0'}}>
+      {editingCustomer.notes || '—'}
+    </div>
+  </div>
+  <div className="row" style={{marginTop:18}}>
+    <button type="button" className="btn secondary" onClick={()=>{
+      setModal('');
+      setEditingCustomer(null);
+    }}>Close</button>
+  </div>
+</div>} {modal==='editCustomer'&&editingCustomer&&
 <form action={updateCustomer}>
   <h2>Edit Customer</h2>
 
@@ -1737,10 +1780,7 @@ onChange={e=>{
     <button
       type="button"
       className="btn secondary"
-      onClick={()=>{
-        setModal('');
-        setEditingCustomer(null);
-      }}
+      onClick={()=>setModal('viewCustomer')}
     >
       Cancel
     </button>
