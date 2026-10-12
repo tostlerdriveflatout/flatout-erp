@@ -986,23 +986,27 @@ return <div className="shell">
         </tr>
       </thead>
       <tbody>
-        {employees.map(e=><tr key={e.id}>
+        {employees.map(e=><tr
+          key={e.id}
+          onClick={()=>{setEditingEmployee(e);setModal('viewEmployee')}}
+          onKeyDown={event=>{
+            if(event.key==='Enter'||event.key===' '){
+              event.preventDefault();
+              setEditingEmployee(e);
+              setModal('viewEmployee');
+            }
+          }}
+          tabIndex={0}
+          aria-label={`View employee ${e.name}`}
+          style={{cursor:'pointer'}}
+        >
           <td>{e.name}</td>
           <td>{e.job_title||'—'}</td>
           <td>{e.email||'—'}</td>
           <td>{e.role}</td>
           <td>{e.erp_access?'On':'Off'}</td>
           <td>{e.active?'Active':'Inactive'}</td>
-<td>
- <div className="row">
-  <button
-    className="btn secondary"
-    onClick={()=>{setEditingEmployee(e);setModal('employee')}}
-  >
-    Edit
-  </button>
-</div>
-</td>
+<td><span className="muted">View →</span></td>
         </tr>)}
       </tbody>
     </table>
@@ -1785,7 +1789,46 @@ onChange={e=>{
       Cancel
     </button>
   </div>
-</form>}{editingEmployee&&<form action={updateEmployee}>
+</form>}{modal==='viewEmployee'&&editingEmployee&&<div>
+  <div className="row" style={{justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+    <h2 style={{margin:0}}>Employee Details</h2>
+    <button type="button" className="btn" onClick={()=>setModal('employee')}>
+      Edit Employee
+    </button>
+  </div>
+  <div className="grid">
+    {([
+      ['Name',editingEmployee.name],
+      ['Job Title',editingEmployee.job_title],
+      ['Email',editingEmployee.email],
+      ['Phone',editingEmployee.phone],
+      ['Role',editingEmployee.role],
+      ['ERP Access',editingEmployee.erp_access?'On':'Off'],
+      ['Employment Status',editingEmployee.active?'Active':'Inactive'],
+      ['ERP Login',editingEmployee.account_activated_at?'ERP Account Active':editingEmployee.user_id?'ERP Invitation Pending':'No ERP Account']
+    ] as [string,string|null|undefined][]).map(([label,value])=>
+      <div className="field" key={label}>
+        <label>{label}</label>
+        <div style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:'8px 0'}}>
+          {value||'—'}
+        </div>
+      </div>
+    )}
+  </div>
+  <div className="field">
+    <label>Employee Notes</label>
+    <div style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:'8px 0'}}>
+      {editingEmployee.notes||'—'}
+    </div>
+  </div>
+  <div className="row" style={{marginTop:18}}>
+    <button type="button" className="btn secondary" onClick={()=>{
+      setModal('');
+      setEditingEmployee(null);
+    }}>Close</button>
+  </div>
+</div>}
+{modal==='employee'&&editingEmployee&&<form action={updateEmployee}>
   <h2>Edit Employee</h2>
 
   <div className="grid">
@@ -1877,12 +1920,17 @@ onChange={e=>{
 </div>
     </div>
 
+  <div className="field">
+    <label>Employee Notes</label>
+    <textarea name="notes" rows={4} defaultValue={editingEmployee.notes||''}/>
+  </div>
+
   <div className="row">
     <button className="btn">Save Employee</button>
     <button
       type="button"
       className="btn secondary"
-      onClick={()=>setEditingEmployee(null)}
+      onClick={()=>setModal('viewEmployee')}
     >
       Cancel
     </button>
