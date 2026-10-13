@@ -1971,7 +1971,7 @@ onChange={e=>{
   <form action={createOrder} style={{display:quickCustomerOpen?'none':undefined}}>
     <h2>New Quotation</h2>
     <div className="grid">
-      <div className="field">
+      <div className="field" style={{gridColumn:'span 2'}}>
         <label>Customer</label>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <input
@@ -1998,8 +1998,8 @@ onChange={e=>{
         <input name="customer_id" type="hidden" value={quotationCustomerId} readOnly/>
       </div>
       <div className="field"><label>Reference #</label><input name="reference_number" placeholder="e.g. PO Mansell"/></div>
-      <div className="field"><label>Tax Rate %</label><input name="tax_rate" type="number" step=".01" defaultValue="7.45"/></div>
       <div className="field"><label>Order Date</label><input name="order_date" type="date" required defaultValue={(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`})()}/></div>
+      <div className="field"><label>Tax Rate %</label><input name="tax_rate" type="number" step=".01" defaultValue="7.45"/></div>
     </div>
     <p className="muted">Total is calculated from order items.</p>
     <button className="btn">Create Quotation</button>
