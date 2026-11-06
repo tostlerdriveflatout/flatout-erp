@@ -86,6 +86,9 @@ export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
 const [tab,setTab]=useState('Dashboard');
 const [module,setModule]=useState('Sales');
+const historySignature=useRef<string|null>(null);
+const historyReady=useRef(false);
+const restoringHistory=useRef(false);
 const [customers,setCustomers]=useState<Customer[]>([]);
 const [employees,setEmployees]=useState<Employee[]>([]);
 const [products,setProducts]=useState<Product[]>([]);
@@ -345,6 +348,108 @@ useEffect(()=>{
 
   return ()=>clearTimeout(timer);
 },[tab,productPage,productSearch,productCategoryFilter]);
+ // Keep ERP navigation in browser history without changing the Next.js page route.
+ // Query parameters also let a bookmarked view survive a refresh.
+ useEffect(()=>{
+   if(!me || historyReady.current)return;
+   historyReady.current=true;
+   restoringHistory.current=true;
+   const params=new URLSearchParams(window.location.search);
+   const requestedModule=params.get('erpModule');
+   const requestedTab=params.get('erpTab');
+   const allowedModules=me.role==='Admin'
+     ? ['Sales','Purchases','Builds','Inventory','Accounting','Employees']
+     : me.role==='Technician' ? ['Builds'] : ['Sales','Purchases','Builds','Inventory'];
+   const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'};
+   const allowedTabs:Record<string,string[]>={
+     Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],
+     Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],
+     Builds:['Builds','Build'],Inventory:['Products'],
+     Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],
+     Employees:['Employees']
+   };
+   const initialModule=requestedModule && allowedModules.includes(requestedModule)?requestedModule:(me.role==='Technician'?'Builds':'Sales');
+   const initialTab=requestedTab && allowedTabs[initialModule]?.includes(requestedTab)?requestedTab:defaults[initialModule];
+   const id=params.get('erpId');
+   const kind=params.get('erpKind');
+   const initialSignature=JSON.stringify([initialModule,initialTab,id||'',kind||'']);
+   historySignature.current=initialSignature;
+   const initialUrl=new URL(window.location.href);
+   initialUrl.searchParams.set('erpModule',initialModule);
+   initialUrl.searchParams.set('erpTab',initialTab);
+   if(!id){initialUrl.searchParams.delete('erpId');initialUrl.searchParams.delete('erpKind');}
+   window.history.replaceState({flatoutErp:true},'',initialUrl.pathname+initialUrl.search+initialUrl.hash);
+   setModule(initialModule);
+   setTab(initialTab);
+   const restore=async()=>{
+     if(!id)return;
+     if(kind==='order' && ['Order','Quote','Invoice'].includes(initialTab)){
+       const {data}=await s.from('orders').select('*,customers(*),order_items(*),payments(*),payment_adjustments(*),order_notes(*)').eq('id',id).single();
+       if(data)setSelected(data as Order);
+       else setTab(initialModule==='Accounting'?'Sales Accounting Overview':'Orders');
+     }else if(kind==='po' && initialTab==='Purchase Order'){
+       const {data}=await s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').eq('id',id).single();
+       if(data)setSelectedPO(data as PurchaseOrder);
+       else setTab('Purchase Orders');
+     }else if(kind==='build' && initialTab==='Build'){
+       const {data}=await s.from('builds').select('*').eq('id',id).single();
+       if(data)setSelectedBuild(data as Build);
+       else setTab('Builds');
+     }
+   };
+   void restore().finally(()=>{setTimeout(()=>{restoringHistory.current=false;},0);});
+ },[me]);
+
+ useEffect(()=>{
+   if(!historyReady.current || !me || restoringHistory.current)return;
+   const kind=['Order','Quote','Invoice'].includes(tab)&&selected?'order':tab==='Purchase Order'&&selectedPO?'po':tab==='Build'&&selectedBuild?'build':'';
+   const id=kind==='order'?selected!.id:kind==='po'?selectedPO!.id:kind==='build'?selectedBuild!.id:'';
+   const signature=JSON.stringify([module,tab,id,kind]);
+   if(signature===historySignature.current)return;
+   historySignature.current=signature;
+   const url=new URL(window.location.href);
+   url.searchParams.set('erpModule',module);
+   url.searchParams.set('erpTab',tab);
+   if(id){url.searchParams.set('erpId',id);url.searchParams.set('erpKind',kind);}
+   else {url.searchParams.delete('erpId');url.searchParams.delete('erpKind');}
+   window.history.pushState({flatoutErp:true},'',url.pathname+url.search+url.hash);
+ },[module,tab,selected?.id,selectedPO?.id,selectedBuild?.id,me]);
+
+ useEffect(()=>{
+   if(!me)return;
+   const onBackForward=async()=>{
+     restoringHistory.current=true;
+     const params=new URLSearchParams(window.location.search);
+     const requestedModule=params.get('erpModule');
+     const allowedModules=me.role==='Admin'?['Sales','Purchases','Builds','Inventory','Accounting','Employees']:
+       me.role==='Technician'?['Builds']:['Sales','Purchases','Builds','Inventory'];
+     const nextModule=requestedModule&&allowedModules.includes(requestedModule)?requestedModule:(me.role==='Technician'?'Builds':'Sales');
+     const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'};
+     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
+     const requestedTab=params.get('erpTab');
+     const nextTab=requestedTab&&allowedTabs[nextModule]?.includes(requestedTab)?requestedTab:defaults[nextModule];
+     const id=params.get('erpId')||'';
+     const kind=params.get('erpKind')||'';
+     historySignature.current=JSON.stringify([nextModule,nextTab,id,kind]);
+     setModule(nextModule);setTab(nextTab);
+     setSelected(null);setSelectedPO(null);setSelectedBuild(null);
+     if(!id){setTimeout(()=>{restoringHistory.current=false;},0);return;}
+     if(kind==='order'&&['Order','Quote','Invoice'].includes(nextTab)){
+       const {data}=await s.from('orders').select('*,customers(*),order_items(*),payments(*),payment_adjustments(*),order_notes(*)').eq('id',id).single();
+       if(data)setSelected(data as Order);
+     }else if(kind==='po'&&nextTab==='Purchase Order'){
+       const {data}=await s.from('purchase_orders').select('*,purchase_order_items(*),orders(*,customers(*))').eq('id',id).single();
+       if(data)setSelectedPO(data as PurchaseOrder);
+     }else if(kind==='build'&&nextTab==='Build'){
+       const {data}=await s.from('builds').select('*').eq('id',id).single();
+       if(data)setSelectedBuild(data as Build);
+     }
+     setTimeout(()=>{restoringHistory.current=false;},0);
+   };
+   window.addEventListener('popstate',onBackForward);
+   return()=>window.removeEventListener('popstate',onBackForward);
+ },[me]);
+
 const confirmedOrders=orders.filter(o=>o.status!=='Draft');const need=confirmedOrders.flatMap(o=>(o.order_items||[]).filter(i=>i.item_type==='Product'&&i.purchasing_status!=='Received'));const totals=(o:Order)=>{let sell=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.sell_price),0),cost=(o.order_items||[]).reduce((a,i)=>a+i.qty*Number(i.cost||0),0);return {sell,cost,gp:sell-cost,gm:sell?((sell-cost)/sell*100):0}};async function logout(){await s.auth.signOut();r.push('/login')}
 async function syncPriceGuide(){
   if(!confirm('Sync the Product Catalog with the Google Price Guide?'))return;
@@ -909,17 +1014,14 @@ const moduleNavItems:Record<string,string[]> = {
     'Products'
   ],
   Purchases: [
-    'Dashboard',
     'Purchasing',
     'Purchase Orders',
     'Products'
   ],
   Builds: [
-    'Dashboard',
     'Builds'
   ],
   Inventory: [
-    'Dashboard',
     'Products'
   ],
   Accounting: [
@@ -931,7 +1033,6 @@ const moduleNavItems:Record<string,string[]> = {
     'Financial Reports'
   ],
   Employees: [
-    'Dashboard',
     'Employees'
   ]
 };
@@ -942,7 +1043,7 @@ return <div className="shell">
     <img
       className="logo"
       src="/flatout-logo.svg"
-      onClick={()=>setTab(module==='Accounting'?'Sales Accounting Overview':'Dashboard')}
+      onClick={()=>setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[module]||'Dashboard')}
       style={{cursor:'pointer'}}
     />
 
@@ -981,7 +1082,7 @@ return <div className="shell">
           className={module===m?'btn':'btn secondary'}
           onClick={()=>{
             setModule(m);
-            setTab(m==='Accounting'?'Sales Accounting Overview':'Dashboard');
+            setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[m]||'Dashboard');
             setSelected(null);
 
         
