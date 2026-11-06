@@ -86,6 +86,31 @@ export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
 const [tab,setTab]=useState('Dashboard');
 const [module,setModule]=useState('Sales');
+// Shared feedback for automatic Supabase writes. Failed saves remain visible.
+const [autoSaveStatus,setAutoSaveStatus]=useState<'idle'|'saving'|'saved'|'error'>('idle');
+const pendingAutoSaves=useRef(0);
+const autoSaveFailed=useRef(false);
+const autoSaveTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+function beginAutoSave(){
+  if(autoSaveTimer.current)clearTimeout(autoSaveTimer.current);
+  pendingAutoSaves.current+=1;
+  setAutoSaveStatus(autoSaveFailed.current?'error':'saving');
+}
+function finishAutoSave(error?:{message:string}|null){
+  pendingAutoSaves.current=Math.max(0,pendingAutoSaves.current-1);
+  if(error)autoSaveFailed.current=true;
+  if(autoSaveFailed.current){setAutoSaveStatus('error');return;}
+  if(pendingAutoSaves.current>0){setAutoSaveStatus('saving');return;}
+  setAutoSaveStatus('saved');
+  autoSaveTimer.current=setTimeout(()=>setAutoSaveStatus('idle'),3000);
+}
+function retryAutoSaveStatus(){
+  // Dismissal clears only the indicator, not any unsaved database change.
+  autoSaveFailed.current=false;
+  setAutoSaveStatus(pendingAutoSaves.current?'saving':'idle');
+}
+useEffect(()=>()=>{if(autoSaveTimer.current)clearTimeout(autoSaveTimer.current);},[]);
+
 const historySignature=useRef<string|null>(null);
 const historyReady=useRef(false);
 const restoringHistory=useRef(false);
@@ -702,7 +727,15 @@ async function addOther(fd:FormData){if(!selected)return;let type=String(fd.get(
 async function refreshOrder(){if(!selected)return;let {data}=await s.from('orders').select('*,customers(*),order_items(*),payments(*),payment_adjustments(*),order_notes(*)').eq('id',selected.id).single();if(data)setSelected(data as any);load()}
 async function dup(i:Item){let {id,...copy}=i as any;copy.tracking=null;if(copy.item_type==='Product')copy.purchasing_status='Need to Order';await s.from('order_items').insert(copy);refreshOrder()}
 async function del(i:Item){if(!confirm(`Remove ${i.description}?`))return;await s.from('order_items').delete().eq('id',i.id);refreshOrder()}
-async function updateItem(i:Item,k:string,v:any){await s.from('order_items').update({[k]:v}).eq('id',i.id);refreshOrder()}
+async function updateItem(i:Item,k:string,v:any){
+  beginAutoSave();
+  try{
+    const {error}=await s.from('order_items').update({[k]:v}).eq('id',i.id);
+    finishAutoSave(error);
+    if(error){console.error('Item autosave failed:',error);return;}
+    await refreshOrder();
+  }catch(error){finishAutoSave({message:'Network error'});console.error('Item autosave failed:',error);}
+}
 async function updateOrderDetails(
   reference:string,
   shippingAddress:string,
@@ -877,7 +910,9 @@ async function createBuild(order:any){
 }
 
 async function updateBuild(id:string,patch:Partial<Build>){
-  const {data,error}=await s
+  beginAutoSave();
+  let result;
+  try{result=await s
     .from('builds')
     .update({
       ...patch,
@@ -886,11 +921,10 @@ async function updateBuild(id:string,patch:Partial<Build>){
     .eq('id',id)
     .select()
     .single();
-
-  if(error){
-    alert(error.message);
-    return;
-  }
+  }catch(error){finishAutoSave({message:'Network error'});console.error('Build autosave failed:',error);return;}
+  const {data,error}=result;
+  finishAutoSave(error);
+  if(error){console.error('Build autosave failed:',error);return;}
 
   const updated=data as Build;
 
@@ -939,7 +973,8 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
   );
 
   if(existing){
-    const {data,error} = await s
+    beginAutoSave();
+  const {data,error} = await s
       .from('build_items')
       .update({
         qty,
@@ -949,10 +984,8 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
       .select()
       .single();
 
-    if(error){
-      alert(error.message);
-      return;
-    }
+    finishAutoSave(error);
+    if(error){console.error('Build item autosave failed:',error);return;}
 
     setBuildItems(prev =>
       prev.map(bi => bi.id === existing.id ? data as BuildItem : bi)
@@ -961,6 +994,7 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
     return;
   }
 
+  beginAutoSave();
   const {data,error} = await s
     .from('build_items')
     .insert({
@@ -971,10 +1005,8 @@ async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
     .select()
     .single();
 
-  if(error){
-    alert(error.message);
-    return;
-  }
+  finishAutoSave(error);
+  if(error){console.error('Build item autosave failed:',error);return;}
 
   setBuildItems(prev => [...prev,data as BuildItem]);
 }
@@ -985,15 +1017,14 @@ async function removeBuildItem(buildId:string,orderItemId:string){
 
   if(!existing)return;
 
+  beginAutoSave();
   const {error}=await s
     .from('build_items')
     .delete()
     .eq('id',existing.id);
 
-  if(error){
-    alert(error.message);
-    return;
-  }
+  finishAutoSave(error);
+  if(error){console.error('Build item autosave failed:',error);return;}
 
   setBuildItems(prev=>prev.filter(bi=>bi.id!==existing.id));
 }
@@ -1095,7 +1126,10 @@ return <div className="shell">
       )}
     </div>
 
-    <div className="top"><div><b>{selected?(tab==='Invoice'?`${selected.order_number} — Invoice`:selected.order_number):selectedPO&&tab==='Purchase Order'?`${selectedPO.po_number} — Purchase Order`:tab}</b><div className="muted">Flatout Sim Racing ERP</div></div><div className="row"><span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
+    <div className="top"><div><b>{selected?(tab==='Invoice'?`${selected.order_number} — Invoice`:selected.order_number):selectedPO&&tab==='Purchase Order'?`${selectedPO.po_number} — Purchase Order`:tab}</b><div className="muted">Flatout Sim Racing ERP</div></div><div className="row">{autoSaveStatus!=='idle'&&<span role="status" aria-live="polite" style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,color:autoSaveStatus==='error'?'#dc2626':autoSaveStatus==='saved'?'#15803d':'#64748b'}}>
+      {autoSaveStatus==='saving'?'◌ Saving...':autoSaveStatus==='saved'?'✓ Saved':'⚠ Not saved'}
+      {autoSaveStatus==='error'&&<button type="button" onClick={retryAutoSaveStatus} title="Dismiss warning (does not retry saving)" style={{background:'none',border:0,cursor:'pointer',color:'inherit',fontSize:12}}>Dismiss</button>}
+    </span>}<span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
 {tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{confirmedOrders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div><div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Sell</th><th>Margin</th></tr></thead><tbody>{confirmedOrders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td>{o.order_number}</td><td>{(o.customers as any)?.name}</td><td>{o.status}</td><td>${t.sell.toLocaleString()}</td><td>{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
 {module==='Accounting'&&(['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports'].includes(tab))&&<AccountingWorkspace tab={tab as any} openOrder={async(id)=>{const {data,error}=await s.from('orders').select('*,customers(*),order_items(*),payments(*),payment_adjustments(*),order_notes(*)').eq('id',id).single();if(error||!data){alert(error?.message||'Order not found');return;}setSelected(data as Order);setTab('Invoice');}}/>}
 {tab==='Employees'&&<section className="card">
