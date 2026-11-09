@@ -75,3 +75,23 @@
  .mobileEditFields input,.mobileEditFields select,.mobileEditFields textarea{width:100%;min-width:0;min-height:44px;padding:10px;border:1px solid #bbb;border-radius:6px;font-size:16px}
  .mobileEditFields textarea{min-height:90px;resize:vertical}
 }
+
+/* Phase 3: build detail layout for technicians */
+@media(max-width:900px){
+ .buildDetailScreen{padding:14px!important;min-width:0}
+ .buildDetailHeader{flex-direction:column;align-items:stretch!important;gap:14px}
+ .buildDetailHeader>div{width:100%;min-width:0}
+ .buildDetailHeader h1{overflow-wrap:anywhere;font-size:25px}
+ .buildStatusField{min-width:0!important;width:100%;margin:0!important}
+ .buildStatusField select{width:100%;min-height:44px;font-size:16px;padding:9px}
+ .buildDetailFacts{grid-template-columns:1fr!important;gap:10px}
+ .buildDetailFacts>.card{min-width:0;padding:14px}
+ .buildDetailFacts select,.buildDetailFacts input{min-height:44px;font-size:16px}
+ .buildDetailScreen textarea{font-size:16px}
+ .buildPartsPanel{overflow:visible!important;padding:12px}
+ .buildPartsPanel h2{padding:0 0 8px;border:0}
+ .buildPartCards{margin-top:12px}
+ .mobileBuildQtyLabel{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:800}
+ .mobileBuildQtyLabel input{width:100%;min-height:44px;font-size:16px;padding:10px;border:1px solid #bbb;border-radius:6px}
+ .mobileBuildHint{font-size:11px;margin-top:6px}
+}
