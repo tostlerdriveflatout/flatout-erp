@@ -1267,8 +1267,8 @@ return <div className="shell">
   const order=orders.find(o=>o.id===selectedBuild.order_id)
   const technician=employees.find(e=>e.id===selectedBuild.assigned_technician_id)
 
-  return <section className="card">
-    <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start'}}>
+  return <section className="card buildDetailScreen">
+    <div className="row buildDetailHeader" style={{justifyContent:'space-between',alignItems:'flex-start'}}>
       <div>
         <button
           className="btn secondary"
@@ -1287,7 +1287,7 @@ return <div className="shell">
         </div>
       </div>
 
-<div className="field" style={{margin:0,minWidth:220}}>
+<div className="field buildStatusField" style={{margin:0,minWidth:220}}>
   <label>Build Status</label>
   <select
     value={selectedBuild.status}
@@ -1310,7 +1310,7 @@ return <div className="shell">
 </div>
     </div>
 
-    <div className="cards" style={{marginTop:18}}>
+    <div className="cards buildDetailFacts" style={{marginTop:18}}>
       <div className="card">
         <div className="muted">Build Name</div>
         <div className="value" style={{fontSize:20}}>
@@ -1410,7 +1410,7 @@ return <div className="shell">
     }}
   />
 </div>
-    <div className="panel" style={{marginTop:18}}>
+    <div className="panel buildPartsPanel" style={{marginTop:18}}>
   <div style={{marginBottom:12}}>
     <h2 style={{margin:0}}>Build Parts</h2>
     <div className="muted">
@@ -1418,7 +1418,17 @@ return <div className="shell">
     </div>
   </div>
 
-  <table>
+  <div className="mobileCards buildPartCards">
+    {(order?.order_items||[]).filter((i:any)=>i.item_type==='Product').map((i:any)=>{
+      const assignment=buildItems.find(bi=>bi.build_id===selectedBuild.id&&bi.order_item_id===i.id);
+      return <MobileBuildPartCard key={i.id} item={i} assignedQty={assignment?.qty||0} onSaveQty={qty=>{
+        if(qty<=0)removeBuildItem(selectedBuild.id,i.id);
+        else assignBuildItem(selectedBuild.id,i.id,qty);
+      }}/>;
+    })}
+    {!(order?.order_items||[]).some((i:any)=>i.item_type==='Product')&&<div className="muted">No physical products are on this Sales Order.</div>}
+  </div>
+  <div className="desktopWorkTable buildPartsDesktopTable"><table>
     <thead>
       <tr>
         <th>Part</th>
@@ -1494,7 +1504,7 @@ onChange={e=>{
         </tr>
       }
     </tbody>
-  </table>
+  </table></div>
 </div>
   </section>
 })()}
@@ -2196,6 +2206,27 @@ function PurchasingFields({item,updateItem}:{item:Item,updateItem:(item:Item,key
     <td><input key={`${item.id}-tracking-${item.tracking||''}`} defaultValue={item.tracking||''} placeholder="Tracking #" onBlur={e=>{if(e.target.value!==(item.tracking||''))void updateItem(item,'tracking',e.target.value||null);}} style={{minWidth:150,width:165}}/></td>
     <td><PurchasingNotesCell item={item} updateItem={updateItem}/></td>
   </>;
+}
+function MobileBuildPartCard({item,assignedQty,onSaveQty}:{item:Item,assignedQty:number,onSaveQty:(qty:number)=>void}){
+  const [draft,setDraft]=useState(String(assignedQty));
+  useEffect(()=>setDraft(String(assignedQty)),[assignedQty,item.id]);
+  const max=Math.max(0,Number(item.qty)||0);
+  const save=()=>{
+    const parsed=Number(draft);
+    if(!Number.isFinite(parsed)){setDraft(String(assignedQty));return;}
+    const qty=Math.max(0,Math.min(max,Math.floor(parsed)));
+    setDraft(String(qty));
+    if(qty!==Number(assignedQty))onSaveQty(qty);
+  };
+  return <div className="mobileWorkCard">
+    <div className="mobileCardHeading"><b>{item.description}</b><span className="mobileStatus">{item.purchasing_status||'—'}</span></div>
+    <div className="mobileSubline muted">{item.vendor||'No vendor'}{item.sku?` · ${item.sku}`:''}</div>
+    <div className="mobileFacts"><div><small>Ordered Quantity</small><strong>{item.qty}</strong></div><div><small>Tracking</small><strong>{item.tracking||'—'}</strong></div></div>
+    <label className="mobileBuildQtyLabel">Assigned to this Build
+      <input type="number" inputMode="numeric" min="0" max={max} step="1" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={save} onKeyDown={e=>{if(e.key==='Enter'){e.currentTarget.blur();}}}/>
+    </label>
+    <div className="muted mobileBuildHint">Changes save when you leave the quantity field. Maximum: {max}.</div>
+  </div>;
 }
 function MobilePurchasingCard({item,order,updateItem,selected,onSelect,openOrder}:{item:Item,order:Order,updateItem:(item:Item,key:string,value:any)=>Promise<void>,selected:boolean,onSelect:(checked:boolean)=>void,openOrder?:()=>void}){
   const [expanded,setExpanded]=useState(false);
