@@ -210,6 +210,8 @@ const [productTotal,setProductTotal]=useState(0);
 const PRODUCTS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
 const [buildFilter,setBuildFilter]=useState<'Active'|'Canceled'|'All'>('Active')
+const [buildScope,setBuildScope]=useState<'Mine'|'All'>('All')
+const [buildSummary,setBuildSummary]=useState<ChecklistProgress[]>([])
 const [showCancelBuildConfirm,setShowCancelBuildConfirm]=useState(false)
 const [buildItems,setBuildItems]=useState<BuildItem[]>([])
 const [checklistProgress,setChecklistProgress]=useState<ChecklistProgress[]>([]);
@@ -226,6 +228,7 @@ async function toggleChecklistTask(key:string,completed:boolean){
   const {data,error}=await s.from('build_checklist_progress').upsert({build_id:buildId,task_key:key,completed,completed_at:completed?new Date().toISOString():null,completed_by:completed?user.id:null,updated_at:new Date().toISOString()},{onConflict:'build_id,task_key'}).select('*').single();
   if(error){alert('Checklist update failed: '+error.message);return;}
   setChecklistProgress(prev=>[...prev.filter(p=>p.task_key!==key),data as ChecklistProgress]);
+  setBuildSummary(prev=>[...prev.filter(p=>!(p.build_id===buildId&&p.task_key===key)),data as ChecklistProgress]);
  }catch(err){console.error(err);alert('Checklist could not be saved.');}finally{setChecklistSaving(null);}
 }
 
@@ -293,6 +296,9 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   setPurchaseOrders((po.data || []) as any)
   setBuilds((b.data || []) as Build[])
   setBuildItems((bi.data||[]) as BuildItem[])
+  const {data:summary,error:summaryError}=await s.from('build_checklist_progress').select('id,build_id,task_key,completed,completed_at,completed_by');
+  if(summaryError)console.error('Build checklist summary load failed:',summaryError);
+  else setBuildSummary((summary||[]) as ChecklistProgress[]);
 }
 
   async function loadOrdersPage(
@@ -1156,6 +1162,26 @@ const moduleNavItems:Record<string,string[]> = {
   ]
 };
 
+// Technician scope and canceled-build visibility are enforced in this workspace.
+const canViewCanceledBuilds=me?.role==='Admin'||me?.role==='Manager';
+const technicianOnly=me?.role==='Technician';
+const visibleBuilds=builds.filter(b=>{
+  if(technicianOnly)return !b.canceled_at && !!me?.id && b.assigned_technician_id===me.id;
+  if(!canViewCanceledBuilds&&b.canceled_at)return false;
+  if(buildScope==='Mine'&&b.assigned_technician_id!==me?.id)return false;
+  return buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at);
+}).sort((a,b)=>{
+  const aDate=buildDateValue(a.installation_date),bDate=buildDateValue(b.installation_date);
+  if(aDate&&bDate)return aDate.localeCompare(bDate);
+  if(aDate)return -1;if(bDate)return 1;
+  return a.build_number.localeCompare(b.build_number);
+});
+const buildChecklistCounts=(b:Build)=>{
+  const partKeys=buildItems.filter(x=>x.build_id===b.id&&Number(x.qty)>0).map(x=>`part:${x.id}`);
+  const keys=[...partKeys,...assemblyTasks.map(([key])=>key)];
+  const completed=keys.filter(key=>buildSummary.some(p=>p.build_id===b.id&&p.task_key===key&&p.completed)).length;
+  return {completed,total:keys.length,parts:partKeys.length,verified:partKeys.filter(key=>buildSummary.some(p=>p.build_id===b.id&&p.task_key===key&&p.completed)).length};
+};
 const navItems = moduleNavItems[module] || ['Dashboard'];
 return <div className="shell">
   <aside className={`side ${mobileMenuOpen?"mobile-open":""}`}>
@@ -1272,24 +1298,26 @@ return <div className="shell">
   <section className="card">
     <div className="row" style={{justifyContent:'space-between'}}>
       <div>
-        <h2>Builds</h2>
+        <h2>{technicianOnly?'My Builds':'Builds'}</h2>
         <div className="muted">
-          Simulator builds and installation workflow
+          {technicianOnly?'Your assigned active builds and installation workflow':'Simulator builds and installation workflow'}
         </div>
       </div>
     </div>
 
     <div className="row" style={{gap:8,marginTop:14,flexWrap:'wrap'}}>
-      {(['Active','Canceled','All'] as const).map(f=><button key={f} type="button" className={buildFilter===f?'btn':'btn secondary'} onClick={()=>setBuildFilter(f)}>{f==='All'?'All Builds':f}</button>)}
+      {!technicianOnly&&<><button type="button" className={buildScope==='Mine'?'btn':'btn secondary'} onClick={()=>setBuildScope('Mine')}>My Builds</button><button type="button" className={buildScope==='All'?'btn':'btn secondary'} onClick={()=>setBuildScope('All')}>All Builds</button></>}
+      {!technicianOnly&&(['Active',...(canViewCanceledBuilds?['Canceled','All']:[])] as ('Active'|'Canceled'|'All')[]).map(f=><button key={f} type="button" className={buildFilter===f?'btn':'btn secondary'} onClick={()=>setBuildFilter(f)}>{f==='All'?'All Builds':f}</button>)}
     </div>
     <div className="mobileCards">
-      {builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).length===0&&<div className="muted">No builds have been created yet.</div>}
-      {builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).map(b=>{
+      {visibleBuilds.length===0&&<div className="muted">No builds have been created yet.</div>}
+      {visibleBuilds.map(b=>{
         const order=orders.find(o=>o.id===b.order_id);
         const tech=employees.find(e=>e.id===b.assigned_technician_id);
         return <div className="mobileWorkCard" key={b.id}>
           <div className="mobileCardHeading"><div><b>{b.build_number}</b><div className="muted">{b.name||'Simulator Build'}</div></div><span className="mobileStatus">{b.canceled_at?'Canceled':b.status}</span></div>
           <div className="mobileFacts"><div><small>Sales Order</small><strong>{order?.order_number||'—'}</strong></div><div><small>Customer</small><strong>{order?.customers?.name||'—'}</strong></div><div><small>Technician</small><strong>{tech?.name||'Unassigned'}</strong></div><div><small>Installation</small><strong>{b.installation_date?displayBuildDate(b.installation_date):'—'}</strong></div></div>
+          {(()=>{const p=buildChecklistCounts(b);return <div style={{margin:'12px 0',fontSize:12}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span>Checklist progress</span><b>{p.completed}/{p.total} ({Math.round(100*p.completed/Math.max(1,p.total))}%)</b></div><div style={{height:7,borderRadius:6,background:'#ddd',overflow:'hidden'}}><div style={{height:'100%',width:`${100*p.completed/Math.max(1,p.total)}%`,background:'#e71d36'}}/></div><div className="muted" style={{marginTop:4}}>Parts verified: {p.verified}/{p.parts}</div></div>})()}
           <button type="button" className="btn mobileFullButton" onClick={()=>{setShowCancelBuildConfirm(false);setSelectedBuild(b);setTab('Build')}}>Open Build</button>
         </div>;
       })}
@@ -1305,20 +1333,21 @@ return <div className="shell">
             <th>Status</th>
             <th>Technician</th>
             <th>Installation</th>
+            <th>Checklist</th>
           </tr>
         </thead>
 
         <tbody>
-          {builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).length===0 ? (
+          {visibleBuilds.length===0 ? (
             <tr>
-              <td colSpan={7}>
+              <td colSpan={8}>
                 <div className="muted" style={{padding:20}}>
                   No builds have been created yet.
                 </div>
               </td>
             </tr>
           ) : (
-            builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).map(b=>{
+            visibleBuilds.map(b=>{
               const order=orders.find(o=>o.id===b.order_id)
               const technician=employees.find(
                 e=>e.id===b.assigned_technician_id
@@ -1344,6 +1373,7 @@ return <div className="shell">
                       ? displayBuildDate(b.installation_date)
                       : '—'}
                   </td>
+                  <td>{(()=>{const p=buildChecklistCounts(b);return <span>{p.completed}/{p.total} ({Math.round(100*p.completed/Math.max(1,p.total))}%)</span>})()}</td>
                 </tr>
               )
             })
@@ -1353,7 +1383,7 @@ return <div className="shell">
     </div>
   </section>
 }
-  {tab==='Build'&&selectedBuild&&(()=>{
+  {tab==='Build'&&selectedBuild&&(!technicianOnly||(!selectedBuild.canceled_at&&selectedBuild.assigned_technician_id===me?.id))&&(canViewCanceledBuilds||!selectedBuild.canceled_at)&&(()=>{
   const order=orders.find(o=>o.id===selectedBuild.order_id)
   const technician=employees.find(e=>e.id===selectedBuild.assigned_technician_id)
 
