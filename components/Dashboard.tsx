@@ -1305,10 +1305,21 @@ return <div className="shell">
       </div>
     </div>
 
-    <div className="row" style={{gap:8,marginTop:14,flexWrap:'wrap'}}>
-      {!technicianOnly&&<><button type="button" className={buildScope==='Mine'?'btn':'btn secondary'} onClick={()=>setBuildScope('Mine')}>My Builds</button><button type="button" className={buildScope==='All'?'btn':'btn secondary'} onClick={()=>setBuildScope('All')}>All Builds</button></>}
-      {!technicianOnly&&(['Active',...(canViewCanceledBuilds?['Canceled','All']:[])] as ('Active'|'Canceled'|'All')[]).map(f=><button key={f} type="button" className={buildFilter===f?'btn':'btn secondary'} onClick={()=>setBuildFilter(f)}>{f==='All'?'All Builds':f}</button>)}
-    </div>
+    {!technicianOnly&&<div style={{display:'flex',flexDirection:'column',gap:12,marginTop:14,marginBottom:14}}>
+      <div>
+        <div className="muted" style={{fontSize:12,fontWeight:700,marginBottom:6}}>BUILD VIEW</div>
+        <div className="row" style={{gap:8,flexWrap:'wrap'}}>
+          <button type="button" className={buildScope==='Mine'?'btn':'btn secondary'} onClick={()=>setBuildScope('Mine')}>My Builds</button>
+          <button type="button" className={buildScope==='All'?'btn':'btn secondary'} onClick={()=>setBuildScope('All')}>All Builds</button>
+        </div>
+      </div>
+      <div>
+        <div className="muted" style={{fontSize:12,fontWeight:700,marginBottom:6}}>BUILD STATUS</div>
+        <div className="row" style={{gap:8,flexWrap:'wrap'}}>
+          {(['Active',...(canViewCanceledBuilds?['Canceled','All']:[])] as ('Active'|'Canceled'|'All')[]).map(f=><button key={f} type="button" className={buildFilter===f?'btn':'btn secondary'} onClick={()=>setBuildFilter(f)}>{f==='All'?'All Statuses':f}</button>)}
+        </div>
+      </div>
+    </div>}
     <div className="mobileCards">
       {visibleBuilds.length===0&&<div className="muted">No builds have been created yet.</div>}
       {visibleBuilds.map(b=>{
