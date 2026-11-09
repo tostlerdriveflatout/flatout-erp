@@ -137,6 +137,20 @@ function TechnicianChecklist({build,order,assigned,progress,onToggle,saving}:{bu
   {build.canceled_at&&<p className="muted">Canceled builds are read-only.</p>}
  </div>
 }
+const LIST_PAGE_SIZE=50;
+function ListPagination({page,onPageChange,total,pageSize=LIST_PAGE_SIZE}: {page:number,onPageChange:(page:number)=>void,total:number,pageSize?:number}){
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  const current=Math.min(Math.max(1,page),pages);
+  return <div className="row" style={{justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginTop:14}}>
+    <span className="muted">{total===0?'0 results':`${(current-1)*pageSize+1}–${Math.min(current*pageSize,total)} of ${total}`}</span>
+    <div className="row" style={{gap:8,alignItems:'center'}}>
+      <button type="button" className="btn secondary" disabled={current<=1} onClick={()=>onPageChange(current-1)}>Previous</button>
+      <span className="muted">Page {current} of {pages}</span>
+      <button type="button" className="btn secondary" disabled={current>=pages} onClick={()=>onPageChange(current+1)}>Next</button>
+    </div>
+  </div>;
+}
+
 export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
 const [tab,setTab]=useState('Dashboard');
@@ -179,6 +193,9 @@ const [forecastOrders,setForecastOrders]=useState<Order[]>([]);
 const [forecastLoading,setForecastLoading]=useState(false);
 const [forecastError,setForecastError]=useState('');
 const [forecastSearch,setForecastSearch]=useState('');
+const [forecastPage,setForecastPage]=useState(1);
+const [buildListPage,setBuildListPage]=useState(1);
+const [employeeListPage,setEmployeeListPage]=useState(1);
 const [forecastVendor,setForecastVendor]=useState('All');
 const [forecastPeriod,setForecastPeriod]=useState('90');
 const [forecastUpdated,setForecastUpdated]=useState<Date|null>(null);
@@ -1231,12 +1248,16 @@ const visibleBuilds=builds.filter(b=>{
   if(aDate)return -1;if(bDate)return 1;
   return a.build_number.localeCompare(b.build_number);
 });
+const safeBuildPage=Math.min(buildListPage,Math.max(1,Math.ceil(visibleBuilds.length/LIST_PAGE_SIZE)));
+const pagedBuilds=visibleBuilds.slice((safeBuildPage-1)*LIST_PAGE_SIZE,safeBuildPage*LIST_PAGE_SIZE);
 const buildChecklistCounts=(b:Build)=>{
   const partKeys=buildItems.filter(x=>x.build_id===b.id&&Number(x.qty)>0).map(x=>`part:${x.id}`);
   const keys=[...partKeys,...assemblyTasks.map(([key])=>key)];
   const completed=keys.filter(key=>buildSummary.some(p=>p.build_id===b.id&&p.task_key===key&&p.completed)).length;
   return {completed,total:keys.length,parts:partKeys.length,verified:partKeys.filter(key=>buildSummary.some(p=>p.build_id===b.id&&p.task_key===key&&p.completed)).length};
 };
+const filteredForecastRows=forecastRows.filter(r=>(forecastVendor==='All'||r.vendor===forecastVendor)&&`${r.sku} ${r.name} ${r.vendor}`.toLowerCase().includes(forecastSearch.toLowerCase()));
+const safeForecastPage=Math.min(forecastPage,Math.max(1,Math.ceil(filteredForecastRows.length/LIST_PAGE_SIZE)));
 const navItems = moduleNavItems[module] || ['Dashboard'];
 return <div className="shell">
   <aside className={`side ${mobileMenuOpen?"mobile-open":""}`}>
@@ -1323,7 +1344,7 @@ return <div className="shell">
         </tr>
       </thead>
       <tbody>
-        {employees.map(e=><tr
+        {employees.slice((employeeListPage-1)*LIST_PAGE_SIZE,employeeListPage*LIST_PAGE_SIZE).map(e=><tr
           key={e.id}
           onClick={()=>{setEditingEmployee(e);setModal('viewEmployee')}}
           onKeyDown={event=>{
@@ -1348,6 +1369,7 @@ return <div className="shell">
       </tbody>
     </table>
   </div>
+  <ListPagination page={employeeListPage} onPageChange={setEmployeeListPage} total={employees.length}/>
 </section>}
  {tab==='Builds'&&
   <section className="card">
@@ -1377,7 +1399,7 @@ return <div className="shell">
     </div>}
     <div className="mobileCards">
       {visibleBuilds.length===0&&<div className="muted">No builds have been created yet.</div>}
-      {visibleBuilds.map(b=>{
+      {pagedBuilds.map(b=>{
         const order=orders.find(o=>o.id===b.order_id);
         const tech=employees.find(e=>e.id===b.assigned_technician_id);
         return <div className="mobileWorkCard" key={b.id}>
@@ -1413,7 +1435,7 @@ return <div className="shell">
               </td>
             </tr>
           ) : (
-            visibleBuilds.map(b=>{
+            pagedBuilds.map(b=>{
               const order=orders.find(o=>o.id===b.order_id)
               const technician=employees.find(
                 e=>e.id===b.assigned_technician_id
@@ -1447,6 +1469,7 @@ return <div className="shell">
         </tbody>
       </table>
     </div>
+    <ListPagination page={safeBuildPage} onPageChange={setBuildListPage} total={visibleBuilds.length}/>
   </section>
 }
   {tab==='Build'&&selectedBuild&&(!technicianOnly||(!selectedBuild.canceled_at&&selectedBuild.assigned_technician_id===me?.id))&&(canViewCanceledBuilds||!selectedBuild.canceled_at)&&(()=>{
@@ -1846,9 +1869,10 @@ onChange={e=>{
   </div>
   <p className="muted" style={{fontSize:12,margin:'0 0 10px'}}>Sales quantities use confirmed Sales Order product lines (excluding canceled orders), based on order date. Build assignments are not counted again. {forecastUpdated?`Last refreshed ${forecastUpdated.toLocaleTimeString()}.`:''}</p>
   <div style={{overflowX:'auto'}}><table style={{minWidth:1120,width:'100%'}}><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th style={{textAlign:'right'}}>Total Sold</th><th style={{textAlign:'right'}}>30 Days</th><th style={{textAlign:'right'}}>90 Days</th><th style={{textAlign:'right'}}>365 Days</th><th style={{textAlign:'right'}}>Monthly Avg.</th><th style={{textAlign:'right'}}>Next 30d*</th><th style={{textAlign:'center'}}>On Hand</th><th style={{textAlign:'center'}}>Incoming</th><th style={{textAlign:'center'}}>Supply</th></tr></thead><tbody>
-    {forecastRows.filter(r=>(forecastVendor==='All'||r.vendor===forecastVendor)&&`${r.sku} ${r.name} ${r.vendor}`.toLowerCase().includes(forecastSearch.toLowerCase())).map(r=><tr key={r.key}><td>{r.sku}</td><td>{r.name}</td><td>{r.vendor}</td><td style={{textAlign:'right'}}>{r.total}</td><td style={{textAlign:'right'}}>{r.last30}</td><td style={{textAlign:'right'}}>{r.last90}</td><td style={{textAlign:'right'}}>{r.last365}</td><td style={{textAlign:'right'}}>{r.monthly.toFixed(1)}</td><td style={{textAlign:'right'}}>{r.forecast30.toFixed(1)}</td><td style={{textAlign:'center'}} className="muted">—</td><td style={{textAlign:'center'}} className="muted">—</td><td style={{textAlign:'center'}} className="muted">—</td></tr>)}
-    {!forecastLoading&&forecastRows.length===0&&<tr><td colSpan={12} className="muted" style={{textAlign:'center',padding:20}}>No confirmed product sales found.</td></tr>}
+    {filteredForecastRows.slice((safeForecastPage-1)*LIST_PAGE_SIZE,safeForecastPage*LIST_PAGE_SIZE).map(r=><tr key={r.key}><td>{r.sku}</td><td>{r.name}</td><td>{r.vendor}</td><td style={{textAlign:'right'}}>{r.total}</td><td style={{textAlign:'right'}}>{r.last30}</td><td style={{textAlign:'right'}}>{r.last90}</td><td style={{textAlign:'right'}}>{r.last365}</td><td style={{textAlign:'right'}}>{r.monthly.toFixed(1)}</td><td style={{textAlign:'right'}}>{r.forecast30.toFixed(1)}</td><td style={{textAlign:'center'}} className="muted">—</td><td style={{textAlign:'center'}} className="muted">—</td><td style={{textAlign:'center'}} className="muted">—</td></tr>)}
+    {!forecastLoading&&filteredForecastRows.length===0&&<tr><td colSpan={12} className="muted" style={{textAlign:'center',padding:20}}>No confirmed product sales found.</td></tr>}
   </tbody></table></div>
+  <ListPagination page={safeForecastPage} onPageChange={setForecastPage} total={filteredForecastRows.length}/>
   <p className="muted" style={{fontSize:12,marginTop:12}}>*Simple demand estimate using the last 90 days divided by three; not a purchase recommendation. On Hand, Incoming, and Supply are intentionally blank until stock tracking is enabled. This report does not change stock or orders.</p>
 </div>}
 {tab==='Products'&&<>
@@ -2473,9 +2497,9 @@ function MobilePurchasingNote({item,updateItem}:{item:Item,updateItem:(item:Item
   useEffect(()=>setDraft(item.purchasing_notes||''),[item.id,item.purchasing_notes]);
   return <label>Purchasing Notes<textarea rows={3} maxLength={2000} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>{if(draft!==(item.purchasing_notes||''))void updateItem(item,'purchasing_notes',draft||null)}}/></label>;
 }
-function PurchasingView({orders,updateItem,createPurchaseOrder,openOrder}:any){const [showReceived,setShowReceived]=useState(false),[search,setSearch]=useState(''),[selectedIds,setSelectedIds]=useState<string[]>([]);const rows=orders.filter((o:any)=>o.status!=='Draft').flatMap((o:any)=>(o.order_items||[]).filter((i:any)=>i.item_type==='Product').map((i:any)=>({item:i,order:o}))).filter((x:any)=>showReceived||x.item.purchasing_status!=='Received').filter((x:any)=>{const q=search.trim().toLowerCase();return !q||[x.order.order_number,x.order.reference_number,x.order.customers?.name,x.item.description,x.item.sku,x.item.vendor,x.item.purchasing_status,x.item.tracking,x.item.vendor_order_number,x.item.purchasing_notes].some((v:any)=>(v||'').toLowerCase().includes(q))});const counts=['Need to Order','Ordered','Backordered','Shipped','Received'].map(st=>({st,n:orders.filter((o:any)=>o.status!=='Draft').flatMap((o:any)=>o.order_items||[]).filter((i:any)=>i.item_type==='Product'&&i.purchasing_status===st).length}));const chosen=rows.filter((x:any)=>selectedIds.includes(x.item.id));const canPO=chosen.length>0&&chosen.every((x:any)=>x.order.id===chosen[0].order.id&&x.item.vendor===chosen[0].item.vendor)&&!!chosen[0].order.reference_number;function toggle(x:any,checked:boolean){if(checked&&selectedIds.length){const first=rows.find((r:any)=>r.item.id===selectedIds[0]);if(first&&(first.order.id!==x.order.id||first.item.vendor!==x.item.vendor)){alert('Select items from the same Sales Order and vendor for one PO.');return}}setSelectedIds(v=>checked?[...new Set([...v,x.item.id])]:v.filter(id=>id!==x.item.id))}return <><div className="row" style={{justifyContent:'space-between',marginBottom:18}}><div><h1>Parts Purchasing</h1><div className="muted">Company-wide purchasing overview. Open an order to manage purchasing for one customer.</div></div><div className="row"><input placeholder="Search order, customer, part, SKU or vendor" value={search} onChange={e=>setSearch(e.target.value)} style={{width:360}}/><label className="row" style={{gap:7}}><input type="checkbox" checked={showReceived} onChange={e=>setShowReceived(e.target.checked)}/> Show Received</label></div></div><div className="cards">{counts.map(x=><div className="card" key={x.st}><div className="muted">{x.st}</div><div className="value">{x.n}</div></div>)}</div>{selectedIds.length>0&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><b>{selectedIds.length} item{selectedIds.length===1?'':'s'} selected</b>{chosen[0]&&<div className="muted">{chosen[0].item.vendor} • {chosen[0].order.reference_number||'Reference # required'}</div>}</div><div className="row"><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(chosen[0].order,chosen.map((x:any)=>x.item));setSelectedIds([])}}>Create PO</button></div></div></div>}<div className="mobileCards">{rows.length===0&&<div className="muted">No purchasing items match this view.</div>}{rows.map(({item:i,order:o}:any)=><MobilePurchasingCard key={i.id} item={i} order={o} updateItem={updateItem} selected={selectedIds.includes(i.id)} onSelect={checked=>toggle({item:i,order:o},checked)} openOrder={()=>openOrder(o)}/>)}</div><div className="panel desktopWorkTable"><table><thead><tr><th></th><th>Order / Customer</th><th>Part</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Vendor Order #</th><th>ETA (Expected Arrival)</th><th>Tracking #</th><th>Notes</th></tr></thead><tbody>{rows.map(({item:i,order:o}:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>toggle({item:i,order:o},e.target.checked)}/></td><td><button className="btn ghost" onClick={()=>openOrder(o)}>{o.order_number}</button>{o.reference_number&&<div><b>{o.reference_number}</b></div>}<div className="muted">{o.customers?.name||'—'}</div></td><td><b>{i.description}</b>{i.sku&&<div className="muted">SKU: {i.sku}</div>}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><PurchasingFields item={i} updateItem={updateItem}/></tr>)}{rows.length===0&&<tr><td colSpan={10} className="muted">No purchasing items match this view.</td></tr>}</tbody></table></div></>}
+function PurchasingView({orders,updateItem,createPurchaseOrder,openOrder}:any){const [showReceived,setShowReceived]=useState(false),[search,setSearch]=useState(''),[selectedIds,setSelectedIds]=useState<string[]>([]),[page,setPage]=useState(1);const rows=orders.filter((o:any)=>o.status!=='Draft').flatMap((o:any)=>(o.order_items||[]).filter((i:any)=>i.item_type==='Product').map((i:any)=>({item:i,order:o}))).filter((x:any)=>showReceived||x.item.purchasing_status!=='Received').filter((x:any)=>{const q=search.trim().toLowerCase();return !q||[x.order.order_number,x.order.reference_number,x.order.customers?.name,x.item.description,x.item.sku,x.item.vendor,x.item.purchasing_status,x.item.tracking,x.item.vendor_order_number,x.item.purchasing_notes].some((v:any)=>(v||'').toLowerCase().includes(q))});const safePage=Math.min(page,Math.max(1,Math.ceil(rows.length/LIST_PAGE_SIZE)));const pageRows=rows.slice((safePage-1)*LIST_PAGE_SIZE,safePage*LIST_PAGE_SIZE);const counts=['Need to Order','Ordered','Backordered','Shipped','Received'].map(st=>({st,n:orders.filter((o:any)=>o.status!=='Draft').flatMap((o:any)=>o.order_items||[]).filter((i:any)=>i.item_type==='Product'&&i.purchasing_status===st).length}));const chosen=rows.filter((x:any)=>selectedIds.includes(x.item.id));const canPO=chosen.length>0&&chosen.every((x:any)=>x.order.id===chosen[0].order.id&&x.item.vendor===chosen[0].item.vendor)&&!!chosen[0].order.reference_number;function toggle(x:any,checked:boolean){if(checked&&selectedIds.length){const first=rows.find((r:any)=>r.item.id===selectedIds[0]);if(first&&(first.order.id!==x.order.id||first.item.vendor!==x.item.vendor)){alert('Select items from the same Sales Order and vendor for one PO.');return}}setSelectedIds(v=>checked?[...new Set([...v,x.item.id])]:v.filter(id=>id!==x.item.id))}return <><div className="row" style={{justifyContent:'space-between',marginBottom:18}}><div><h1>Parts Purchasing</h1><div className="muted">Company-wide purchasing overview. Open an order to manage purchasing for one customer.</div></div><div className="row"><input placeholder="Search order, customer, part, SKU or vendor" value={search} onChange={e=>setSearch(e.target.value)} style={{width:360}}/><label className="row" style={{gap:7}}><input type="checkbox" checked={showReceived} onChange={e=>setShowReceived(e.target.checked)}/> Show Received</label></div></div><div className="cards">{counts.map(x=><div className="card" key={x.st}><div className="muted">{x.st}</div><div className="value">{x.n}</div></div>)}</div>{selectedIds.length>0&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><b>{selectedIds.length} item{selectedIds.length===1?'':'s'} selected</b>{chosen[0]&&<div className="muted">{chosen[0].item.vendor} • {chosen[0].order.reference_number||'Reference # required'}</div>}</div><div className="row"><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(chosen[0].order,chosen.map((x:any)=>x.item));setSelectedIds([])}}>Create PO</button></div></div></div>}<div className="mobileCards">{rows.length===0&&<div className="muted">No purchasing items match this view.</div>}{pageRows.map(({item:i,order:o}:any)=><MobilePurchasingCard key={i.id} item={i} order={o} updateItem={updateItem} selected={selectedIds.includes(i.id)} onSelect={checked=>toggle({item:i,order:o},checked)} openOrder={()=>openOrder(o)}/>)}</div><div className="panel desktopWorkTable"><table><thead><tr><th></th><th>Order / Customer</th><th>Part</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Vendor Order #</th><th>ETA (Expected Arrival)</th><th>Tracking #</th><th>Notes</th></tr></thead><tbody>{pageRows.map(({item:i,order:o}:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>toggle({item:i,order:o},e.target.checked)}/></td><td><button className="btn ghost" onClick={()=>openOrder(o)}>{o.order_number}</button>{o.reference_number&&<div><b>{o.reference_number}</b></div>}<div className="muted">{o.customers?.name||'—'}</div></td><td><b>{i.description}</b>{i.sku&&<div className="muted">SKU: {i.sku}</div>}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><PurchasingFields item={i} updateItem={updateItem}/></tr>)}{rows.length===0&&<tr><td colSpan={10} className="muted">No purchasing items match this view.</td></tr>}</tbody></table></div><ListPagination page={safePage} onPageChange={setPage} total={rows.length}/></>}
 
-function PurchaseOrdersView({purchaseOrders,openPO}:any){return <><div style={{marginBottom:18}}><h1>Purchase Orders</h1><div className="muted">Vendor POs created from Parts Purchasing.</div></div><div className="panel"><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Sales Order</th><th>Customer</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{purchaseOrders.map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{po.orders?.order_number||'—'}</td><td>{po.orders?.customers?.name||'—'}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{purchaseOrders.length===0&&<tr><td colSpan={7} className="muted">No purchase orders yet.</td></tr>}</tbody></table></div></>}
+function PurchaseOrdersView({purchaseOrders,openPO}:any){const [page,setPage]=useState(1);const safePage=Math.min(page,Math.max(1,Math.ceil(purchaseOrders.length/LIST_PAGE_SIZE)));return <><div style={{marginBottom:18}}><h1>Purchase Orders</h1><div className="muted">Vendor POs created from Parts Purchasing.</div></div><div className="panel"><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Sales Order</th><th>Customer</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{purchaseOrders.slice((safePage-1)*LIST_PAGE_SIZE,safePage*LIST_PAGE_SIZE).map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{po.orders?.order_number||'—'}</td><td>{po.orders?.customers?.name||'—'}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{purchaseOrders.length===0&&<tr><td colSpan={7} className="muted">No purchase orders yet.</td></tr>}</tbody></table></div><ListPagination page={safePage} onPageChange={setPage} total={purchaseOrders.length}/></>}
 
 function PurchaseOrderView({po,back}:any){const items=po.purchase_order_items||[],total=items.reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <><div className="invoice-actions row"><button className="btn ghost" onClick={back}>← Back to Purchase Orders</button><button className="btn secondary" onClick={()=>window.print()}>Print / Save PDF</button></div><div className="invoice-sheet"><div className="invoice-head"><div><img src="/flatout-logo.svg"/><div style={{marginTop:10,lineHeight:1.45}}><b>Flatout Sim Racing</b><div>1388 S 300 W</div><div>Suite 100</div><div>Salt Lake City, UT 84115</div><div>info@driveflatout.com</div></div></div><div className="invoice-title"><h1>PURCHASE ORDER</h1><div><b>PO: {po.po_number}</b></div><div>Vendor: {po.vendor}</div><div className="muted">Date: {new Date(po.created_at).toLocaleDateString()}</div></div></div><div className="invoice-meta"><div><div className="invoice-label">VENDOR</div><b>{po.vendor}</b></div><div><div className="invoice-label">SALES ORDER</div><div>{po.orders?.order_number||'—'}</div><div>{po.orders?.customers?.name||''}</div></div><div><div className="invoice-label">SHIP TO</div><b>Flatout Sim Racing</b><div>1388 S 300 W, Suite 100</div><div>Salt Lake City, UT 84115</div></div></div><table className="invoice-table"><thead><tr><th>Description</th><th>SKU</th><th>Qty</th><th>Unit Cost</th><th>Amount</th></tr></thead><tbody>{items.map((i:any)=><tr key={i.id}><td><b>{i.description}</b></td><td>{i.sku||'—'}</td><td>{Number(i.qty)}</td><td>${Number(i.unit_cost||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>${(Number(i.qty)*Number(i.unit_cost||0)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>)}</tbody></table><div className="invoice-summary"><div className="invoice-total"><span>PO Total</span><b>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div></div>{po.notes&&<div className="panel"><b>Notes</b><div style={{whiteSpace:'pre-line',marginTop:6}}>{po.notes}</div></div>}<div className="invoice-footer">Flatout Sim Racing Purchase Order</div></div></>}
 
