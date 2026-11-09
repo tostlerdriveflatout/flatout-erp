@@ -104,42 +104,39 @@ function printTechnicianBuildSheet(build:Build,order:Order|undefined,technician:
     const item=order?.order_items?.find(i=>i.id===bi.order_item_id);
     return item?{description:item.description,sku:item.sku||'—',vendor:item.vendor||'—',qty:bi.qty}:null;
   }).filter((item):item is {description:string,sku:string,vendor:string,qty:number}=>item!==null);
-  const rows=items.length?items.map(item=>`<tr><td class="check"><span class="checkbox"></span></td><td class="description">${escapeHtml(item.description)}</td><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.vendor)}</td><td class="qty">${escapeHtml(item.qty)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">No parts have been assigned to this build.</td></tr>';
+  const rows=items.length?items.map(item=>`<tr><td class="check">&#9633;</td><td>${escapeHtml(item.description)}</td><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.vendor)}</td><td class="qty">${escapeHtml(item.qty)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">No parts have been assigned to this build.</td></tr>';
   const note=(value:string|null)=>value?.trim()?escapeHtml(value).replace(/\r?\n/g,'<br>'):'<span class="muted">No notes entered</span>';
-  const logoUrl=new URL('/flatout-logo.svg',window.location.origin).href;
   const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Build Sheet - ${escapeHtml(build.build_number)}</title><style>
-    :root{--red:#e71d36;--black:#111;--line:#dce0d9;--muted:#626a70}
-    *{box-sizing:border-box}html{background:#e9ebeb}body{margin:0;color:#17191b;font:11px Arial,Helvetica,sans-serif}
-    .toolbar{max-width:8.5in;margin:18px auto 10px;display:flex;align-items:center;gap:10px;font-size:12px}
-    .toolbar button{background:var(--black);color:white;border:0;border-radius:5px;padding:10px 14px;font-weight:700;cursor:pointer}
-    .toolbar button:first-child{background:var(--red)}.toolbar span{margin-left:auto;color:#626a70}
-    .sheet{width:8.5in;min-height:11in;margin:0 auto 28px;background:#fff;box-shadow:0 3px 24px #0002;padding:.53in .55in .55in}
-    .header{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#111;color:#fff;padding:17px 19px;border-bottom:5px solid var(--red);margin:-.53in -.55in 20px;padding-left:.55in;padding-right:.55in;min-height:96px}
-    .logo{display:block;width:170px;max-height:58px;object-fit:contain;object-position:left center;filter:invert(1)}
-    .heading{text-align:right}.heading h1{font-size:23px;letter-spacing:.055em;line-height:1.1;margin:0 0 7px;font-weight:900}.heading .number{font-size:11px;color:#e0e0e0;font-weight:700}
-    .section-label{font-size:10px;font-weight:900;letter-spacing:.085em;text-transform:uppercase;margin:0 0 9px;color:#26292b}
-    .meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:22px}
-    .meta .field{min-width:0;padding:12px 13px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
-    .meta .field:nth-child(3n){border-right:0}.meta .field:nth-last-child(-n+3){border-bottom:0}
-    .field b{display:block;font-size:9px;letter-spacing:.045em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-    .field span{display:block;font-size:11px;font-weight:700;overflow-wrap:anywhere;line-height:1.3}
-    .section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#111;color:#fff;padding:10px 12px;margin:0;font-size:11px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
-    .section-heading .count{font-size:10px;color:#fff;font-weight:600;letter-spacing:0}
-    table{width:100%;border-collapse:collapse;table-layout:fixed}thead{display:table-header-group}th{background:#f1f2f1;color:#34383b;font-size:9px;text-transform:uppercase;letter-spacing:.03em;text-align:left}
-    td,th{border-bottom:1px solid #e1e3e0;padding:9px 8px;vertical-align:middle;overflow-wrap:anywhere;line-height:1.35}tbody tr:nth-child(even){background:#fafafa}tr{break-inside:avoid;page-break-inside:avoid}
-    .check{text-align:center;width:35px}.checkbox{display:inline-block;width:13px;height:13px;border:1.5px solid #555;border-radius:2px;vertical-align:middle}
-    .description{font-weight:600}.qty{text-align:center;width:42px;font-weight:700}.empty{text-align:center;color:#777;padding:20px}
-    .notes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}.note{border:1px solid var(--line);border-radius:5px;min-height:108px;padding:12px;overflow-wrap:anywhere;line-height:1.55;break-inside:avoid;page-break-inside:avoid}
-    .note b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:9px;padding-bottom:7px;border-bottom:1px solid var(--line)}.muted{color:#7b8084}
-    .signoff{display:flex;gap:25px;margin-top:37px;break-inside:avoid;page-break-inside:avoid}.signoff div{flex:1;border-top:1px solid #666;padding-top:8px;color:#5b6165;font-size:10px}
-    .footer{margin-top:20px;padding-top:10px;border-top:1px solid var(--line);font-size:9px;color:#7b8084;text-align:center}
-    @page{size:letter;margin:0}
-    @media print{html{background:#fff}body{margin:0;print-color-adjust:exact;-webkit-print-color-adjust:exact}.toolbar{display:none}.sheet{box-shadow:none;margin:0;min-height:0;width:8.5in;max-width:none}thead{display:table-header-group}}
-    @media screen and (max-width:850px){.toolbar{margin:12px 14px;flex-wrap:wrap}.toolbar span{display:none}.sheet{width:100%;min-height:0;padding:24px 18px;margin:0;box-shadow:none}.header{margin:-24px -18px 20px;padding:16px 18px;min-height:80px}.logo{width:125px}.heading h1{font-size:18px}.meta{grid-template-columns:repeat(2,minmax(0,1fr))}.meta .field{border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.meta .field:nth-child(3n){border-right:1px solid var(--line)}.meta .field:nth-child(2n){border-right:0}.meta .field:nth-last-child(-n+3){border-bottom:1px solid var(--line)}.meta .field:nth-last-child(-n+2){border-bottom:0}.notes{grid-template-columns:1fr}td,th{padding:7px 5px;font-size:9px}}
-    </style></head><body><div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button><button onclick="window.close()">Close</button><span>US Letter · Technician Build Sheet</span></div><main class="sheet"><header class="header"><img class="logo" src="${escapeHtml(logoUrl)}" alt="Flatout Sim Racing"><div class="heading"><h1>BUILD SHEET</h1><div class="number">${escapeHtml(build.build_number)}</div></div></header><div class="section-label">Build information</div><section class="meta"><div class="field"><b>Sales Order</b><span>${escapeHtml(order?.order_number||'—')}</span></div><div class="field"><b>Build Number</b><span>${escapeHtml(build.build_number)}</span></div><div class="field"><b>Build Name</b><span>${escapeHtml(build.name||'—')}</span></div><div class="field"><b>Customer</b><span>${escapeHtml(order?.customers?.name||'—')}</span></div><div class="field"><b>Technician</b><span>${escapeHtml(technician)}</span></div><div class="field"><b>Installation Date</b><span>${escapeHtml(displayBuildDate(build.installation_date))}</span></div><div class="field"><b>Build Status</b><span>${escapeHtml(build.canceled_at?'Canceled':build.status)}</span></div><div class="field"><b>Assigned Parts</b><span>${items.length} line items</span></div><div class="field"><b>Total Quantity</b><span>${items.reduce((sum,item)=>sum+Number(item.qty),0)}</span></div></section><div class="section-heading"><span>Parts Checklist</span><span class="count">${items.length} items</span></div><table><thead><tr><th style="width:35px">Check</th><th>Item / Description</th><th style="width:19%">SKU</th><th style="width:17%">Vendor</th><th style="width:42px;text-align:center">Qty</th></tr></thead><tbody>${rows}</tbody></table><section class="notes"><div class="note"><b>Build Notes</b>${note(build.build_notes)}</div><div class="note"><b>Installation Notes</b>${note(build.installation_notes)}</div></section><section class="signoff"><div>Technician Signature</div><div>Date Completed</div></section><footer class="footer">FLATOUT SIM RACING · INTERNAL TECHNICIAN BUILD SHEET</footer></main></body></html>`;
+    @page{size:letter;margin:0.55in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#161616;margin:0;font-size:11px}header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:3px solid #e71d36;padding-bottom:12px;margin-bottom:16px}.brand{font-size:21px;font-weight:900;font-style:italic;letter-spacing:-1px}.brand small{display:block;font-size:9px;letter-spacing:1px;font-style:normal}.heading{text-align:right}.heading h1{font-size:22px;margin:0}.heading div{font-size:11px;margin-top:3px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 20px;padding:14px;background:#f5f5f5;border:1px solid #ddd;border-radius:5px;margin-bottom:20px}.meta div{min-width:0}.meta b{display:block;color:#666;font-size:9px;text-transform:uppercase;margin-bottom:3px}.meta span{font-size:12px;font-weight:600;overflow-wrap:anywhere}h2{font-size:13px;background:#111;color:#fff;padding:9px 11px;margin:18px 0 0}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#eee;font-size:10px;text-align:left}td,th{border:1px solid #d8d8d8;padding:8px 7px;overflow-wrap:anywhere}tr{break-inside:avoid}.check{font-size:19px;text-align:center;width:36px}.qty{text-align:center;width:45px}.empty{text-align:center;color:#777;padding:16px}.notes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}.note{border:1px solid #ddd;border-radius:4px;min-height:86px;padding:10px;overflow-wrap:anywhere;line-height:1.5;break-inside:avoid}.note b{display:block;margin-bottom:8px}.muted{color:#777}.signoff{display:flex;gap:24px;margin-top:30px}.signoff div{flex:1;border-top:1px solid #777;padding-top:6px;font-size:10px;color:#555}.toolbar{padding:12px 0;margin-bottom:12px;display:flex;gap:8px}.toolbar button{border:0;border-radius:4px;padding:10px 14px;background:#111;color:#fff;font-weight:700;cursor:pointer}@media print{.toolbar{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}@media(max-width:600px){.notes{grid-template-columns:1fr}.meta{grid-template-columns:1fr 1fr}}
+    </style></head><body><div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button><button onclick="window.close()">Close</button></div><header><div class="brand">FLATOUT <small>SIM RACING</small></div><div class="heading"><h1>BUILD SHEET</h1><div>${escapeHtml(build.build_number)}</div></div></header><section class="meta"><div><b>Sales Order</b><span>${escapeHtml(order?.order_number||'—')}</span></div><div><b>Build Name</b><span>${escapeHtml(build.name||'—')}</span></div><div><b>Customer</b><span>${escapeHtml(order?.customers?.name||'—')}</span></div><div><b>Technician</b><span>${escapeHtml(technician)}</span></div><div><b>Installation Date</b><span>${escapeHtml(displayBuildDate(build.installation_date))}</span></div><div><b>Build Status</b><span>${escapeHtml(build.canceled_at?'Canceled':build.status)}</span></div></section><h2>PARTS CHECKLIST (${items.length} ITEMS)</h2><table><thead><tr><th style="width:36px">&#10003;</th><th>Item / Description</th><th style="width:22%">SKU</th><th style="width:20%">Vendor</th><th style="width:45px;text-align:center">Qty</th></tr></thead><tbody>${rows}</tbody></table><section class="notes"><div class="note"><b>Build Notes</b>${note(build.build_notes)}</div><div class="note"><b>Installation Notes</b>${note(build.installation_notes)}</div></section><section class="signoff"><div>Technician Signature</div><div>Date Completed</div></section></body></html>`;
   popup.document.open();popup.document.write(html);popup.document.close();popup.focus();
 }
-
+type ChecklistProgress={id:string,build_id:string,task_key:string,completed:boolean,completed_at:string|null,completed_by:string|null};
+const assemblyTasks=[
+ ['assembly:chassis','Chassis assembled and secured'],
+ ['assembly:hardware','Seat, wheelbase, pedals and displays mounted'],
+ ['assembly:cables','Power and cable management completed'],
+ ['assembly:software','PC, drivers and simulator software configured'],
+ ['assembly:calibration','Steering, pedals and displays calibrated'],
+ ['assembly:test','Full simulator functionality tested']
+] as const;
+function TechnicianChecklist({build,order,assigned,progress,onToggle,saving}:{build:Build,order:Order|undefined,assigned:BuildItem[],progress:ChecklistProgress[],onToggle:(key:string,completed:boolean)=>Promise<void>,saving:string|null}){
+ const [stage,setStage]=useState<'parts'|'assembly'>('parts');
+ const parts=assigned.filter(b=>b.build_id===build.id&&Number(b.qty)>0).map(b=>({assignment:b,item:order?.order_items?.find(i=>i.id===b.order_item_id)})).filter(x=>!!x.item);
+ const tasks=stage==='parts'?parts.map(x=>({key:`part:${x.assignment.id}`,label:x.item!.description,detail:`SKU: ${x.item!.sku||'—'} · Qty: ${x.assignment.qty}`})):assemblyTasks.map(([key,label])=>({key,label,detail:''}));
+ const allKeys=[...parts.map(x=>`part:${x.assignment.id}`),...assemblyTasks.map(([key])=>key)];
+ const done=allKeys.filter(key=>progress.some(p=>p.task_key===key&&p.completed)).length;
+ return <div className="panel" style={{padding:16,marginTop:18}}>
+  <div className="row" style={{justifyContent:'space-between',flexWrap:'wrap'}}><h2 style={{border:0,padding:0}}>Technician Checklist</h2><b>{done} / {allKeys.length} complete</b></div>
+  <div style={{height:9,background:'#eee',borderRadius:6,overflow:'hidden',margin:'12px 0 16px'}}><div style={{height:'100%',width:`${allKeys.length?done/allKeys.length*100:0}%`,background:'#e71d36'}}/></div>
+  <div className="row" style={{flexWrap:'wrap',marginBottom:14}}><button type="button" className={`btn ${stage==='parts'?'':'secondary'}`} onClick={()=>setStage('parts')}>1. Verify Parts</button><button type="button" className={`btn ${stage==='assembly'?'':'secondary'}`} onClick={()=>setStage('assembly')}>2. Assembly & Testing</button></div>
+  {stage==='parts'&&<p className="muted">Verify each assigned part and its quantity before checking it off. Progress is saved for the whole team.</p>}
+  {tasks.length===0&&<p className="muted">No parts are assigned to this build yet.</p>}
+  <div style={{display:'grid',gap:9}}>{tasks.map(t=>{const completed=!!progress.find(p=>p.task_key===t.key)?.completed;return <label key={t.key} style={{display:'flex',gap:12,alignItems:'center',border:'1px solid #dce0d9',borderRadius:7,padding:12,cursor:build.canceled_at?'not-allowed':'pointer'}}><input type="checkbox" style={{width:20,height:20,flexShrink:0}} checked={completed} disabled={!!build.canceled_at||saving===t.key} onChange={e=>void onToggle(t.key,e.target.checked)}/><span style={{minWidth:0}}><b style={{fontSize:14}}>{t.label}</b>{t.detail&&<div className="muted" style={{fontSize:12}}>{t.detail}</div>}</span>{saving===t.key&&<span className="muted">Saving…</span>}</label>})}</div>
+  <div className="row" style={{marginTop:14,flexWrap:'wrap'}}>{stage==='parts'?<button type="button" className="btn secondary" onClick={()=>setStage('assembly')}>Continue to Assembly →</button>:<button type="button" className="btn secondary" onClick={()=>setStage('parts')}>← Back to Parts</button>}{done===allKeys.length&&allKeys.length>0&&<span style={{color:'#15803d',fontWeight:700}}>✓ Checklist complete</span>}</div>
+  {build.canceled_at&&<p className="muted">Canceled builds are read-only.</p>}
+ </div>
+}
 export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
 const [tab,setTab]=useState('Dashboard');
@@ -214,8 +211,24 @@ const PRODUCTS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
 const [buildFilter,setBuildFilter]=useState<'Active'|'Canceled'|'All'>('Active')
 const [showCancelBuildConfirm,setShowCancelBuildConfirm]=useState(false)
-const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
+const [buildItems,setBuildItems]=useState<BuildItem[]>([])
+const [checklistProgress,setChecklistProgress]=useState<ChecklistProgress[]>([]);
+const [checklistSaving,setChecklistSaving]=useState<string|null>(null);                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
+useEffect(()=>{if(!selectedBuild){setChecklistProgress([]);return;}let active=true;setChecklistProgress([]);(async()=>{const {data,error}=await s.from('build_checklist_progress').select('*').eq('build_id',selectedBuild.id);if(active){if(error)console.error('Checklist load failed',error);else setChecklistProgress((data||[]) as ChecklistProgress[]);}})();return()=>{active=false;};},[selectedBuild?.id]);
+async function toggleChecklistTask(key:string,completed:boolean){
+ if(!selectedBuild||selectedBuild.canceled_at||checklistSaving)return;
+ const buildId=selectedBuild.id;
+ setChecklistSaving(key);
+ try{
+  const {data:{user}}=await s.auth.getUser();
+  if(!user){alert('Please sign in again.');return;}
+  const {data,error}=await s.from('build_checklist_progress').upsert({build_id:buildId,task_key:key,completed,completed_at:completed?new Date().toISOString():null,completed_by:completed?user.id:null,updated_at:new Date().toISOString()},{onConflict:'build_id,task_key'}).select('*').single();
+  if(error){alert('Checklist update failed: '+error.message);return;}
+  setChecklistProgress(prev=>[...prev.filter(p=>p.task_key!==key),data as ChecklistProgress]);
+ }catch(err){console.error(err);alert('Checklist could not be saved.');}finally{setChecklistSaving(null);}
+}
+
 const [me,setMe]=useState<Employee|null>(null)
 async function load() {
   // First verify the currently logged-in user's employee record.
@@ -1500,6 +1513,7 @@ return <div className="shell">
     }}
   />
 </div>
+    <TechnicianChecklist build={selectedBuild} order={order} assigned={buildItems} progress={checklistProgress} onToggle={toggleChecklistTask} saving={checklistSaving}/>
     <div className="panel buildPartsPanel" style={{marginTop:18}}>
   <div style={{marginBottom:12}}>
     <h2 style={{margin:0}}>Build Parts</h2>
