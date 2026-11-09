@@ -1940,7 +1940,7 @@ onChange={e=>{
     <ListPagination page={analyticsSafePage} onPageChange={setAnalyticsPage} total={analyticsRows.length}/>
   </>}
 </div>}
-{module==='Inventory'&&['Inventory Forecast','Product Analytics','Vendor Analytics'].includes(tab)&&<div className="panel" style={{padding:16}}>
+{module==='Inventory'&&tab==='Inventory Forecast'&&<div className="panel" style={{padding:16}}>
   <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12,marginBottom:14}}>
     <div><h2 style={{margin:0}}>Inventory Forecast</h2><p className="muted" style={{margin:'5px 0'}}>Corbeau-style product demand reporting. Physical stock tracking is not active.</p></div>
     <button type="button" className="btn secondary" onClick={()=>void loadForecast()} disabled={forecastLoading}>{forecastLoading?'Loading…':'Refresh Sales History'}</button>
