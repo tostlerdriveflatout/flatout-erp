@@ -71,6 +71,7 @@ type Build = {
   build_notes: string | null,
   installation_notes: string | null,
   installation_date: string | null,
+  canceled_at: string | null,
   created_at: string,
   updated_at: string
 };
@@ -82,6 +83,18 @@ type BuildItem = {
   created_at: string,
   updated_at: string
 };
+// A date-only database value is a calendar day, not a UTC timestamp.
+function buildDateValue(value:string|null|undefined){
+  if(!value)return '';
+  const match=String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match?`${match[1]}-${match[2]}-${match[3]}`:'';
+}
+function displayBuildDate(value:string|null|undefined){
+  const day=buildDateValue(value);
+  if(!day)return '—';
+  const [year,month,date]=day.split('-');
+  return `${month}/${date}/${year}`;
+}
 export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
 const [tab,setTab]=useState('Dashboard');
@@ -154,6 +167,8 @@ const [productTotal,setProductTotal]=useState(0);
   
 const PRODUCTS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
+const [buildFilter,setBuildFilter]=useState<'Active'|'Canceled'|'All'>('Active')
+const [showCancelBuildConfirm,setShowCancelBuildConfirm]=useState(false)
 const [buildItems,setBuildItems]=useState<BuildItem[]>([])                                                          
 const [selectedBuild,setSelectedBuild]=useState<Build|null>(null)
 const [me,setMe]=useState<Employee|null>(null)
@@ -935,6 +950,20 @@ async function updateBuild(id:string,patch:Partial<Build>){
     setSelectedBuild(updated);
   }
 }
+async function setBuildCancellation(build:Build,cancel:boolean){
+  if(me?.role!=='Admin')return;
+  beginAutoSave();
+  let result;
+  try{
+    result=await s.from('builds').update({canceled_at:cancel?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',build.id).select().single();
+  }catch(error){finishAutoSave({message:'Network error'});alert('Unable to update build.');return;}
+  finishAutoSave(result.error);
+  if(result.error){alert(`Unable to ${cancel?'cancel':'restore'} build: ${result.error.message}`);return;}
+  const updated=result.data as Build;
+  setBuilds(prev=>prev.map(b=>b.id===updated.id?updated:b));
+  setSelectedBuild(prev=>prev?.id===updated.id?updated:prev);
+  setShowCancelBuildConfirm(false);
+}
 async function assignBuildItem(buildId:string,orderItemId:string,qty:number){
   // Find the original Sales Order item so we know how many were ordered
   const orderItem = orders
@@ -1192,15 +1221,18 @@ return <div className="shell">
       </div>
     </div>
 
+    <div className="row" style={{gap:8,marginTop:14,flexWrap:'wrap'}}>
+      {(['Active','Canceled','All'] as const).map(f=><button key={f} type="button" className={buildFilter===f?'btn':'btn secondary'} onClick={()=>setBuildFilter(f)}>{f==='All'?'All Builds':f}</button>)}
+    </div>
     <div className="mobileCards">
-      {builds.length===0&&<div className="muted">No builds have been created yet.</div>}
-      {builds.map(b=>{
+      {builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).length===0&&<div className="muted">No builds have been created yet.</div>}
+      {builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).map(b=>{
         const order=orders.find(o=>o.id===b.order_id);
         const tech=employees.find(e=>e.id===b.assigned_technician_id);
         return <div className="mobileWorkCard" key={b.id}>
-          <div className="mobileCardHeading"><div><b>{b.build_number}</b><div className="muted">{b.name||'Simulator Build'}</div></div><span className="mobileStatus">{b.status}</span></div>
-          <div className="mobileFacts"><div><small>Sales Order</small><strong>{order?.order_number||'—'}</strong></div><div><small>Customer</small><strong>{order?.customers?.name||'—'}</strong></div><div><small>Technician</small><strong>{tech?.name||'Unassigned'}</strong></div><div><small>Installation</small><strong>{b.installation_date?new Date(b.installation_date+'T12:00:00').toLocaleDateString():'—'}</strong></div></div>
-          <button type="button" className="btn mobileFullButton" onClick={()=>{setSelectedBuild(b);setTab('Build')}}>Open Build</button>
+          <div className="mobileCardHeading"><div><b>{b.build_number}</b><div className="muted">{b.name||'Simulator Build'}</div></div><span className="mobileStatus">{b.canceled_at?'Canceled':b.status}</span></div>
+          <div className="mobileFacts"><div><small>Sales Order</small><strong>{order?.order_number||'—'}</strong></div><div><small>Customer</small><strong>{order?.customers?.name||'—'}</strong></div><div><small>Technician</small><strong>{tech?.name||'Unassigned'}</strong></div><div><small>Installation</small><strong>{b.installation_date?displayBuildDate(b.installation_date):'—'}</strong></div></div>
+          <button type="button" className="btn mobileFullButton" onClick={()=>{setShowCancelBuildConfirm(false);setSelectedBuild(b);setTab('Build')}}>Open Build</button>
         </div>;
       })}
     </div>
@@ -1219,7 +1251,7 @@ return <div className="shell">
         </thead>
 
         <tbody>
-          {builds.length===0 ? (
+          {builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).length===0 ? (
             <tr>
               <td colSpan={7}>
                 <div className="muted" style={{padding:20}}>
@@ -1228,7 +1260,7 @@ return <div className="shell">
               </td>
             </tr>
           ) : (
-            builds.map(b=>{
+            builds.filter(b=>buildFilter==='All'||(buildFilter==='Canceled'?!!b.canceled_at:!b.canceled_at)).map(b=>{
               const order=orders.find(o=>o.id===b.order_id)
               const technician=employees.find(
                 e=>e.id===b.assigned_technician_id
@@ -1238,7 +1270,7 @@ return <div className="shell">
                <tr
   key={b.id}
   onClick={()=>{
-    setSelectedBuild(b);
+    setShowCancelBuildConfirm(false);setSelectedBuild(b);
     setTab('Build');
   }}
   style={{cursor:'pointer'}}
@@ -1247,11 +1279,11 @@ return <div className="shell">
                   <td>{b.name||'—'}</td>
                   <td>{order?.order_number||'—'}</td>
                   <td>{(order?.customers as any)?.name||'—'}</td>
-                  <td>{b.status}</td>
+                  <td>{b.canceled_at?'Canceled':b.status}</td>
                   <td>{technician?.name||'Unassigned'}</td>
                   <td>
                     {b.installation_date
-                      ? new Date(b.installation_date).toLocaleDateString()
+                      ? displayBuildDate(b.installation_date)
                       : '—'}
                   </td>
                 </tr>
@@ -1280,7 +1312,18 @@ return <div className="shell">
           ← Back to Builds
         </button>
 
+        <div className="row" style={{marginTop:10,flexWrap:'wrap'}}>
+          {me?.role==='Admin'&&(selectedBuild.canceled_at
+            ? <button type="button" className="btn ghost" onClick={()=>void setBuildCancellation(selectedBuild,false)}>↻ Restore Build</button>
+            : <button type="button" className="btn ghost" style={{color:'#b91c1c',border:'1px solid #b91c1c'}} onClick={()=>setShowCancelBuildConfirm(true)}>Cancel Build</button>)}
+        </div>
+        {showCancelBuildConfirm&&!selectedBuild.canceled_at&&<div className="panel" style={{padding:14,maxWidth:440,border:'1px solid #b91c1c'}}>
+          <b>Cancel this build?</b>
+          <p className="muted">It will be hidden from Active Builds. Its original status, notes, parts and Sales Order link will be preserved.</p>
+          <div className="row" style={{flexWrap:'wrap'}}><button type="button" className="btn" onClick={()=>void setBuildCancellation(selectedBuild,true)}>Yes, Cancel Build</button><button type="button" className="btn secondary" onClick={()=>setShowCancelBuildConfirm(false)}>Keep Build</button></div>
+        </div>}
         <h1 style={{marginBottom:4}}>{selectedBuild.build_number}</h1>
+        {selectedBuild.canceled_at&&<div style={{fontWeight:800,color:'#b91c1c'}}>Canceled — hidden from Active Builds</div>}
 
         <div className="muted">
           {order?.customers?.name||'Customer'} • {order?.order_number||'Sales Order'}
@@ -1291,6 +1334,7 @@ return <div className="shell">
   <label>Build Status</label>
   <select
     value={selectedBuild.status}
+    disabled={!!selectedBuild.canceled_at}
     onChange={e=>updateBuild(
       selectedBuild.id,
       {status:e.target.value as Build['status']}
@@ -1349,7 +1393,7 @@ return <div className="shell">
     type="date"
     value={
       selectedBuild.installation_date
-        ? selectedBuild.installation_date.slice(0,10)
+        ? buildDateValue(selectedBuild.installation_date)
         : ''
     }
     onChange={e=>updateBuild(
@@ -2416,7 +2460,7 @@ const q=productSearch.trim().toLowerCase(),matches=q?products.filter((p:any)=>[p
     </div>
   </div>
 </div>
-  <div className="cards" style={{marginTop:18}}><div className="card"><div className="muted">Sell</div><div className="value">${totals.sell.toLocaleString()}</div></div><div className="card"><div className="muted">Cost</div><div className="value">${totals.cost.toLocaleString()}</div></div><div className="card"><div className="muted">Gross Profit</div><div className="value">${totals.gp.toLocaleString()}</div></div><div className="card"><div className="muted">Gross Margin</div><div className="value">{totals.gm.toFixed(1)}%</div></div></div><div className="row mobileSectionTabs" style={{gap:8,margin:'18px 0'}}>{(o.status==='Draft'?['Order Items']:['Order Items','Purchasing','Purchase Orders','Builds','Payments']).map(x=><button key={x} className={section===x?'btn':'btn secondary'} onClick={()=>setSection(x)}>{x}{x==='Purchase Orders'&&orderPOs.length?` (${orderPOs.length})`:x==='Builds'?` (${orderBuilds.length})`:''}</button>)}</div>{section==='Order Items'&&<><div className="row mobileItemToolbar" style={{justifyContent:'space-between',marginBottom:12}}><h2 style={{margin:0}}>Order Items</h2><div className="row"><div style={{position:'relative',minWidth:330}}><input value={productSearch} onChange={e=>{setProductSearch(e.target.value);setPid('')}} placeholder="Search product, SKU, vendor or category..." style={{width:'100%'}}/>{q&&matches.length>0&&!pid&&<div style={{position:'absolute',zIndex:20,top:'100%',left:0,right:0,background:'#fff',border:'1px solid #dce0d9',maxHeight:300,overflowY:'auto',boxShadow:'0 8px 20px rgba(0,0,0,.12)'}}>{matches.map((p:any)=><button type="button" key={p.id} onClick={()=>{setPid(p.id);setProductSearch(p.name)}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',background:'#fff',border:0,borderBottom:'1px solid #eee',cursor:'pointer'}}><b>{p.name}</b><div className="muted">{[p.sku,p.vendor,p.category].filter(Boolean).join(' • ')}</div></button>)}</div>}</div><button className="btn" disabled={!pid} onClick={()=>{if(pid){addProduct(pid);setPid('');setProductSearch('')}}}>+ Add Product</button><button className="btn secondary" onClick={addOther}>+ Labor / Other</button></div></div><div className="panel"><table><thead><tr><th>Item</th><th>Type</th><th>Qty</th><th>Sell</th><th>Cost</th><th>Status</th><th>Actions</th></tr></thead><tbody>{(o.order_items||[]).map((i:any)=><tr key={i.id}><td><b>{i.description}</b><div className="muted">{i.vendor}</div></td><td>{i.item_type}</td><td><input style={{width:60}} defaultValue={i.qty} onBlur={e=>updateItem(i,'qty',Number(e.target.value))}/></td><td><input style={{width:100}} defaultValue={i.sell_price} onBlur={e=>updateItem(i,'sell_price',Number(e.target.value))}/></td><td><input style={{width:100}} defaultValue={i.cost??''} placeholder="—" onBlur={e=>updateItem(i,'cost',e.target.value===''?null:Number(e.target.value))}/></td><td>{i.item_type==='Product'?<select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select>:'—'}</td><td><div className="row"><button className="btn ghost" onClick={()=>dup(i)}>Duplicate</button><button className="btn ghost" onClick={()=>del(i)}>Remove</button></div></td></tr>)}</tbody></table></div></>}{section==='Purchasing'&&<><div className="row" style={{justifyContent:'space-between',marginBottom:12}}><div><h2 style={{margin:0}}>Purchasing</h2><div className="muted">Manage parts for this Sales Order and create vendor POs here.</div></div>{selectedIds.length>0&&<div className="row"><span className="muted">{chosen.length} selected • {chosen[0]?.vendor||'Vendor required'}</span><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(o,chosen);setSelectedIds([])}}>Create PO</button></div>}</div>{!o.reference_number&&<div className="panel"><b>Reference # required for Purchase Orders.</b><div className="muted">Add a Reference # above before creating a vendor PO.</div></div>}<div className="mobileCards">{physical.length===0&&<div className="muted">No physical products on this order.</div>}{physical.map((i:any)=><MobilePurchasingCard key={i.id} item={i} order={o} updateItem={updateItem} selected={selectedIds.includes(i.id)} onSelect={checked=>togglePOItem(i,checked)}/>)}</div><div className="panel desktopWorkTable"><table><thead><tr><th></th><th>Part</th><th>SKU</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Vendor Order #</th><th>ETA (Expected Arrival)</th><th>Tracking #</th><th>Notes</th></tr></thead><tbody>{physical.map((i:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>togglePOItem(i,e.target.checked)}/></td><td><b>{i.description}</b></td><td>{i.sku||'—'}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><PurchasingFields item={i} updateItem={updateItem}/></tr>)}{physical.length===0&&<tr><td colSpan={10} className="muted">No physical products on this order.</td></tr>}</tbody></table></div></>}{section==='Purchase Orders'&&<div className="panel"><h2>Purchase Orders</h2><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{orderPOs.map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{orderPOs.length===0&&<tr><td colSpan={5} className="muted">No Purchase Orders have been created for this Sales Order yet.</td></tr>}</tbody></table></div>}{section==='Builds'&&<div className="panel"><h2>Builds for {o.order_number}</h2><div style={{padding:16,display:'grid',gap:12}}>{orderBuilds.length===0&&<div className="muted">No builds have been created for this Sales Order yet. Use + Create Build above to get started.</div>}{orderBuilds.map((b:Build)=><div key={b.id} style={{border:'1px solid var(--platinum)',borderRadius:8,padding:14,display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12}}><div style={{minWidth:0}}><b>{b.build_number}</b><div>{b.name||'Simulator Build'}</div><div className="muted" style={{fontSize:13}}>Status: {b.status}{b.installation_date?` • Installation: ${b.installation_date.slice(0,10)}`:''}</div></div><button type="button" className="btn" onClick={()=>openBuild(b)}>Open Build</button></div>)}</div></div>}{section==='Payments'&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><h2>Payments</h2><div className="muted">Payment status: {o.payment_status}</div></div><button className="btn" onClick={openInvoice}>Open Invoice / Record Payment</button></div><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th>Amount</th></tr></thead><tbody>{(o.payments||[]).map((p:any)=><tr key={p.id}><td>{new Date(p.paid_at).toLocaleDateString()}</td><td>{p.payment_method||'—'}</td><td>{p.reference||'—'}</td><td>{p.notes||'—'}</td><td>${Number(p.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>)}{!(o.payments||[]).length&&<tr><td colSpan={5} className="muted">No payments recorded yet.</td></tr>}</tbody></table></div>}<div className="panel" style={{marginTop:18}}><h2>Order Notes</h2><div style={{maxHeight:320,overflowY:'auto',marginBottom:18}}>{[...(o.order_notes||[])].sort((a:any,b:any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()).map((n:any)=><div key={n.id} style={{padding:'12px 0',borderBottom:'1px solid #eee'}}><div style={{whiteSpace:'pre-line'}}>{n.note}</div><div className="muted" style={{marginTop:5}}>{new Date(n.created_at).toLocaleString()}</div></div>)}{!(o.order_notes||[]).length&&<div className="muted">No order notes yet.</div>}</div><div className="field"><label>Add Order Note</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} placeholder="Backorder, ETA, vendor update, customer update, installation note, etc."/></div><button className="btn" disabled={!note.trim()} onClick={async()=>{await addOrderNote(note);setNote('')}}>Add Note</button></div>
+  <div className="cards" style={{marginTop:18}}><div className="card"><div className="muted">Sell</div><div className="value">${totals.sell.toLocaleString()}</div></div><div className="card"><div className="muted">Cost</div><div className="value">${totals.cost.toLocaleString()}</div></div><div className="card"><div className="muted">Gross Profit</div><div className="value">${totals.gp.toLocaleString()}</div></div><div className="card"><div className="muted">Gross Margin</div><div className="value">{totals.gm.toFixed(1)}%</div></div></div><div className="row mobileSectionTabs" style={{gap:8,margin:'18px 0'}}>{(o.status==='Draft'?['Order Items']:['Order Items','Purchasing','Purchase Orders','Builds','Payments']).map(x=><button key={x} className={section===x?'btn':'btn secondary'} onClick={()=>setSection(x)}>{x}{x==='Purchase Orders'&&orderPOs.length?` (${orderPOs.length})`:x==='Builds'?` (${orderBuilds.length})`:''}</button>)}</div>{section==='Order Items'&&<><div className="row mobileItemToolbar" style={{justifyContent:'space-between',marginBottom:12}}><h2 style={{margin:0}}>Order Items</h2><div className="row"><div style={{position:'relative',minWidth:330}}><input value={productSearch} onChange={e=>{setProductSearch(e.target.value);setPid('')}} placeholder="Search product, SKU, vendor or category..." style={{width:'100%'}}/>{q&&matches.length>0&&!pid&&<div style={{position:'absolute',zIndex:20,top:'100%',left:0,right:0,background:'#fff',border:'1px solid #dce0d9',maxHeight:300,overflowY:'auto',boxShadow:'0 8px 20px rgba(0,0,0,.12)'}}>{matches.map((p:any)=><button type="button" key={p.id} onClick={()=>{setPid(p.id);setProductSearch(p.name)}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',background:'#fff',border:0,borderBottom:'1px solid #eee',cursor:'pointer'}}><b>{p.name}</b><div className="muted">{[p.sku,p.vendor,p.category].filter(Boolean).join(' • ')}</div></button>)}</div>}</div><button className="btn" disabled={!pid} onClick={()=>{if(pid){addProduct(pid);setPid('');setProductSearch('')}}}>+ Add Product</button><button className="btn secondary" onClick={addOther}>+ Labor / Other</button></div></div><div className="panel"><table><thead><tr><th>Item</th><th>Type</th><th>Qty</th><th>Sell</th><th>Cost</th><th>Status</th><th>Actions</th></tr></thead><tbody>{(o.order_items||[]).map((i:any)=><tr key={i.id}><td><b>{i.description}</b><div className="muted">{i.vendor}</div></td><td>{i.item_type}</td><td><input style={{width:60}} defaultValue={i.qty} onBlur={e=>updateItem(i,'qty',Number(e.target.value))}/></td><td><input style={{width:100}} defaultValue={i.sell_price} onBlur={e=>updateItem(i,'sell_price',Number(e.target.value))}/></td><td><input style={{width:100}} defaultValue={i.cost??''} placeholder="—" onBlur={e=>updateItem(i,'cost',e.target.value===''?null:Number(e.target.value))}/></td><td>{i.item_type==='Product'?<select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select>:'—'}</td><td><div className="row"><button className="btn ghost" onClick={()=>dup(i)}>Duplicate</button><button className="btn ghost" onClick={()=>del(i)}>Remove</button></div></td></tr>)}</tbody></table></div></>}{section==='Purchasing'&&<><div className="row" style={{justifyContent:'space-between',marginBottom:12}}><div><h2 style={{margin:0}}>Purchasing</h2><div className="muted">Manage parts for this Sales Order and create vendor POs here.</div></div>{selectedIds.length>0&&<div className="row"><span className="muted">{chosen.length} selected • {chosen[0]?.vendor||'Vendor required'}</span><button className="btn secondary" onClick={()=>setSelectedIds([])}>Clear</button><button className="btn" disabled={!canPO} onClick={async()=>{await createPurchaseOrder(o,chosen);setSelectedIds([])}}>Create PO</button></div>}</div>{!o.reference_number&&<div className="panel"><b>Reference # required for Purchase Orders.</b><div className="muted">Add a Reference # above before creating a vendor PO.</div></div>}<div className="mobileCards">{physical.length===0&&<div className="muted">No physical products on this order.</div>}{physical.map((i:any)=><MobilePurchasingCard key={i.id} item={i} order={o} updateItem={updateItem} selected={selectedIds.includes(i.id)} onSelect={checked=>togglePOItem(i,checked)}/>)}</div><div className="panel desktopWorkTable"><table><thead><tr><th></th><th>Part</th><th>SKU</th><th>Vendor</th><th>Qty</th><th>Status</th><th>Vendor Order #</th><th>ETA (Expected Arrival)</th><th>Tracking #</th><th>Notes</th></tr></thead><tbody>{physical.map((i:any)=><tr key={i.id}><td><input type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>togglePOItem(i,e.target.checked)}/></td><td><b>{i.description}</b></td><td>{i.sku||'—'}</td><td>{i.vendor||'—'}</td><td>{Number(i.qty)}</td><td><select value={i.purchasing_status} onChange={e=>updateItem(i,'purchasing_status',e.target.value)}>{['Need to Order','Ordered','Backordered','Shipped','Received'].map(x=><option key={x}>{x}</option>)}</select></td><PurchasingFields item={i} updateItem={updateItem}/></tr>)}{physical.length===0&&<tr><td colSpan={10} className="muted">No physical products on this order.</td></tr>}</tbody></table></div></>}{section==='Purchase Orders'&&<div className="panel"><h2>Purchase Orders</h2><table><thead><tr><th>PO Number</th><th>Vendor</th><th>Date</th><th>Total Cost</th><th>Status</th></tr></thead><tbody>{orderPOs.map((po:any)=>{const total=(po.purchase_order_items||[]).reduce((a:number,i:any)=>a+Number(i.qty)*Number(i.unit_cost||0),0);return <tr key={po.id} onClick={()=>openPO(po)} style={{cursor:'pointer'}}><td><b>{po.po_number}</b></td><td>{po.vendor}</td><td>{new Date(po.created_at).toLocaleDateString()}</td><td>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td>{po.status}</td></tr>})}{orderPOs.length===0&&<tr><td colSpan={5} className="muted">No Purchase Orders have been created for this Sales Order yet.</td></tr>}</tbody></table></div>}{section==='Builds'&&<div className="panel"><h2>Builds for {o.order_number}</h2><div style={{padding:16,display:'grid',gap:12}}>{orderBuilds.length===0&&<div className="muted">No builds have been created for this Sales Order yet. Use + Create Build above to get started.</div>}{orderBuilds.map((b:Build)=><div key={b.id} style={{border:'1px solid var(--platinum)',borderRadius:8,padding:14,display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12}}><div style={{minWidth:0}}><b>{b.build_number}</b><div>{b.name||'Simulator Build'}</div><div className="muted" style={{fontSize:13}}>Status: {b.canceled_at?'Canceled':b.status}{b.installation_date?` • Installation: ${displayBuildDate(b.installation_date)}`:''}</div></div><button type="button" className="btn" onClick={()=>openBuild(b)}>Open Build</button></div>)}</div></div>}{section==='Payments'&&<div className="panel"><div className="row" style={{justifyContent:'space-between'}}><div><h2>Payments</h2><div className="muted">Payment status: {o.payment_status}</div></div><button className="btn" onClick={openInvoice}>Open Invoice / Record Payment</button></div><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th>Amount</th></tr></thead><tbody>{(o.payments||[]).map((p:any)=><tr key={p.id}><td>{new Date(p.paid_at).toLocaleDateString()}</td><td>{p.payment_method||'—'}</td><td>{p.reference||'—'}</td><td>{p.notes||'—'}</td><td>${Number(p.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>)}{!(o.payments||[]).length&&<tr><td colSpan={5} className="muted">No payments recorded yet.</td></tr>}</tbody></table></div>}<div className="panel" style={{marginTop:18}}><h2>Order Notes</h2><div style={{maxHeight:320,overflowY:'auto',marginBottom:18}}>{[...(o.order_notes||[])].sort((a:any,b:any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()).map((n:any)=><div key={n.id} style={{padding:'12px 0',borderBottom:'1px solid #eee'}}><div style={{whiteSpace:'pre-line'}}>{n.note}</div><div className="muted" style={{marginTop:5}}>{new Date(n.created_at).toLocaleString()}</div></div>)}{!(o.order_notes||[]).length&&<div className="muted">No order notes yet.</div>}</div><div className="field"><label>Add Order Note</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} placeholder="Backorder, ETA, vendor update, customer update, installation note, etc."/></div><button className="btn" disabled={!note.trim()} onClick={async()=>{await addOrderNote(note);setNote('')}}>Add Note</button></div>
 </>  
   }
 function InvoiceView({o,totals,back,addPayment,adjustPayment,quote=false}:any){
