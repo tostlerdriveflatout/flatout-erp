@@ -174,6 +174,15 @@ const [customers,setCustomers]=useState<Customer[]>([]);
 const [employees,setEmployees]=useState<Employee[]>([]);
 const [products,setProducts]=useState<Product[]>([]);
 const [orders,setOrders]=useState<Order[]>([]);
+// Independent history dataset: order-list pagination must not affect the forecast.
+const [forecastOrders,setForecastOrders]=useState<Order[]>([]);
+const [forecastLoading,setForecastLoading]=useState(false);
+const [forecastError,setForecastError]=useState('');
+const [forecastSearch,setForecastSearch]=useState('');
+const [forecastVendor,setForecastVendor]=useState('All');
+const [forecastPeriod,setForecastPeriod]=useState('90');
+const [forecastUpdated,setForecastUpdated]=useState<Date|null>(null);
+
  const [adjustmentPayment,setAdjustmentPayment]=useState<Payment|null>(null);
  const paymentSubmissionInProgress=useRef(false);
  const adjustmentSubmissionInProgress=useRef(false);
@@ -413,6 +422,51 @@ async function loadProductsPage(
 useEffect(()=>{
   load();
 },[])
+// Read-only reporting; no inventory movements or stock quantities are inferred.
+async function loadForecast(){
+  setForecastLoading(true);setForecastError('');
+  try{
+    const collected:Order[]=[];
+    const batch=500;
+    for(let offset=0;;offset+=batch){
+      const {data,error}=await s.from('orders')
+        .select('id,order_number,status,order_date,created_at,order_items(id,product_id,item_type,description,sku,vendor,qty,sell_price)')
+        .neq('status','Draft').order('created_at',{ascending:false}).range(offset,offset+batch-1);
+      if(error)throw error;
+      const page=(data||[]) as unknown as Order[];
+      collected.push(...page);
+      if(page.length<batch)break;
+    }
+    setForecastOrders(collected);setForecastUpdated(new Date());
+  }catch(error){setForecastError(error instanceof Error?error.message:'Unable to load sales history.');}
+  finally{setForecastLoading(false);}
+}
+useEffect(()=>{if(module==='Inventory'&&tab==='Inventory Forecast')void loadForecast();},[module,tab]);
+const forecastRows=useMemo(()=>{
+  const grouped=new Map<string,{key:string,sku:string,name:string,vendor:string,category:string,total:number,revenue:number,last30:number,last90:number,last365:number,period:number,months:Record<string,number>}>();
+  const now=new Date();const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const daysSince=(raw:string)=>Math.floor((today.getTime()-new Date(raw+'T12:00:00').getTime())/86400000);
+  for(const order of forecastOrders){
+    // Exclude explicitly canceled orders, as well as quotations.
+    if(/cancelled|canceled/i.test(order.status))continue;
+    const date=(order.order_date||order.created_at||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
+    const age=daysSince(date);if(!Number.isFinite(age)||age<0)continue;
+    for(const item of order.order_items||[]){
+      if(item.item_type!=='Product')continue;
+      const qty=Number(item.qty);if(!Number.isFinite(qty)||qty<=0)continue;
+      const key=item.product_id?`id:${item.product_id}`:item.sku?.trim()?`sku:${item.sku.trim().toLowerCase()}`:`name:${item.description.trim().toLowerCase()}`;
+      let row=grouped.get(key);
+      if(!row){row={key,sku:item.sku||'—',name:item.description,vendor:item.vendor||'—',category:'—',total:0,revenue:0,last30:0,last90:0,last365:0,period:0,months:{}};grouped.set(key,row);}
+      row.total+=qty;row.revenue+=qty*Number(item.sell_price||0);
+      if(age<30)row.last30+=qty;if(age<90)row.last90+=qty;if(age<365)row.last365+=qty;
+      if(age<Number(forecastPeriod))row.period+=qty;
+      const month=date.slice(0,7);row.months[month]=(row.months[month]||0)+qty;
+    }
+  }
+  return [...grouped.values()].map(row=>({...row,monthly:row.last90/3,forecast30:row.last90/3,forecast90:row.last90})).sort((a,b)=>b.period-a.period||a.name.localeCompare(b.name));
+},[forecastOrders,forecastPeriod]);
+
 useEffect(()=>{
   if(tab !== 'Orders' && tab !== 'Quotations') return;
 
@@ -465,11 +519,11 @@ useEffect(()=>{
    const allowedModules=me.role==='Admin'
      ? ['Sales','Purchases','Builds','Inventory','Accounting','Employees']
      : me.role==='Technician' ? ['Builds'] : ['Sales','Purchases','Builds','Inventory'];
-   const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'};
+   const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'};
    const allowedTabs:Record<string,string[]>={
      Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],
      Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],
-     Builds:['Builds','Build'],Inventory:['Products'],
+     Builds:['Builds','Build'],Inventory:['Inventory Forecast','Products'],
      Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],
      Employees:['Employees']
    };
@@ -529,8 +583,8 @@ useEffect(()=>{
      const allowedModules=me.role==='Admin'?['Sales','Purchases','Builds','Inventory','Accounting','Employees']:
        me.role==='Technician'?['Builds']:['Sales','Purchases','Builds','Inventory'];
      const nextModule=requestedModule&&allowedModules.includes(requestedModule)?requestedModule:(me.role==='Technician'?'Builds':'Sales');
-     const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'};
-     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
+     const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'};
+     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Inventory Forecast','Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
      const requestedTab=params.get('erpTab');
      const nextTab=requestedTab&&allowedTabs[nextModule]?.includes(requestedTab)?requestedTab:defaults[nextModule];
      const id=params.get('erpId')||'';
@@ -1147,6 +1201,7 @@ const moduleNavItems:Record<string,string[]> = {
     'Builds'
   ],
   Inventory: [
+    'Inventory Forecast',
     'Products'
   ],
   Accounting: [
@@ -1188,7 +1243,7 @@ return <div className="shell">
     <img
       className="logo"
       src="/flatout-logo.svg"
-      onClick={()=>{setMobileMenuOpen(false);setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[module]||'Dashboard');}}
+      onClick={()=>{setMobileMenuOpen(false);setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[module]||'Dashboard');}}
       style={{cursor:'pointer'}}
     />
 
@@ -1229,7 +1284,7 @@ return <div className="shell">
           onClick={()=>{
             setModule(m);
             setMobileMenuOpen(false);
-            setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Products',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[m]||'Dashboard');
+            setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[m]||'Dashboard');
             setSelected(null);
 
         
@@ -1772,6 +1827,30 @@ onChange={e=>{
     </div>
   </div>
 </>}
+{module==='Inventory'&&tab==='Inventory Forecast'&&<div className="panel" style={{padding:16}}>
+  <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12,marginBottom:14}}>
+    <div><h2 style={{margin:0}}>Inventory Forecast</h2><p className="muted" style={{margin:'5px 0'}}>Corbeau-style product demand reporting. Physical stock tracking is not active.</p></div>
+    <button type="button" className="btn secondary" onClick={()=>void loadForecast()} disabled={forecastLoading}>{forecastLoading?'Loading…':'Refresh Sales History'}</button>
+  </div>
+  {forecastError&&<p role="alert" style={{color:'#b91c1c'}}>Sales history could not be loaded: {forecastError}</p>}
+  <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:14}}>
+    <div style={{border:'1px solid #ddd',padding:'10px 14px',borderRadius:6,minWidth:145}}><div className="muted">Products Sold</div><b style={{fontSize:20}}>{forecastRows.filter(r=>r.total>0).length}</b></div>
+    <div style={{border:'1px solid #ddd',padding:'10px 14px',borderRadius:6,minWidth:145}}><div className="muted">Units Sold (90 days)</div><b style={{fontSize:20}}>{forecastRows.reduce((a,r)=>a+r.last90,0).toLocaleString()}</b></div>
+    <div style={{border:'1px solid #ddd',padding:'10px 14px',borderRadius:6,minWidth:145}}><div className="muted">Monthly Demand (90-day avg.)</div><b style={{fontSize:20}}>{(forecastRows.reduce((a,r)=>a+r.last90,0)/3).toFixed(1)}</b></div>
+    <div style={{border:'1px solid #ddd',padding:'10px 14px',borderRadius:6,minWidth:145}}><div className="muted">Inventory Tracking</div><b>Inactive</b></div>
+  </div>
+  <div className="row" style={{gap:10,flexWrap:'wrap',marginBottom:12}}>
+    <input aria-label="Search forecast products" placeholder="Search SKU, product, or vendor…" value={forecastSearch} onChange={e=>setForecastSearch(e.target.value)} style={{minWidth:220,flex:'1 1 220px'}}/>
+    <select aria-label="Vendor" value={forecastVendor} onChange={e=>setForecastVendor(e.target.value)}><option value="All">All Vendors</option>{[...new Set(forecastRows.map(r=>r.vendor))].sort().map(v=><option key={v} value={v}>{v}</option>)}</select>
+    <select aria-label="Sales period" value={forecastPeriod} onChange={e=>setForecastPeriod(e.target.value)}><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option></select>
+  </div>
+  <p className="muted" style={{fontSize:12,margin:'0 0 10px'}}>Sales quantities use confirmed Sales Order product lines (excluding canceled orders), based on order date. Build assignments are not counted again. {forecastUpdated?`Last refreshed ${forecastUpdated.toLocaleTimeString()}.`:''}</p>
+  <div style={{overflowX:'auto'}}><table style={{minWidth:1120,width:'100%'}}><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th style={{textAlign:'right'}}>Total Sold</th><th style={{textAlign:'right'}}>30 Days</th><th style={{textAlign:'right'}}>90 Days</th><th style={{textAlign:'right'}}>365 Days</th><th style={{textAlign:'right'}}>Monthly Avg.</th><th style={{textAlign:'right'}}>Next 30d*</th><th style={{textAlign:'center'}}>On Hand</th><th style={{textAlign:'center'}}>Incoming</th><th style={{textAlign:'center'}}>Supply</th></tr></thead><tbody>
+    {forecastRows.filter(r=>(forecastVendor==='All'||r.vendor===forecastVendor)&&`${r.sku} ${r.name} ${r.vendor}`.toLowerCase().includes(forecastSearch.toLowerCase())).map(r=><tr key={r.key}><td>{r.sku}</td><td>{r.name}</td><td>{r.vendor}</td><td style={{textAlign:'right'}}>{r.total}</td><td style={{textAlign:'right'}}>{r.last30}</td><td style={{textAlign:'right'}}>{r.last90}</td><td style={{textAlign:'right'}}>{r.last365}</td><td style={{textAlign:'right'}}>{r.monthly.toFixed(1)}</td><td style={{textAlign:'right'}}>{r.forecast30.toFixed(1)}</td><td style={{textAlign:'center'}} className="muted">—</td><td style={{textAlign:'center'}} className="muted">—</td><td style={{textAlign:'center'}} className="muted">—</td></tr>)}
+    {!forecastLoading&&forecastRows.length===0&&<tr><td colSpan={12} className="muted" style={{textAlign:'center',padding:20}}>No confirmed product sales found.</td></tr>}
+  </tbody></table></div>
+  <p className="muted" style={{fontSize:12,marginTop:12}}>*Simple demand estimate using the last 90 days divided by three; not a purchase recommendation. On Hand, Incoming, and Supply are intentionally blank until stock tracking is enabled. This report does not change stock or orders.</p>
+</div>}
 {tab==='Products'&&<>
 <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
   <div className="row">
