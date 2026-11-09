@@ -95,3 +95,54 @@
  .mobileBuildQtyLabel input{width:100%;min-height:44px;font-size:16px;padding:10px;border:1px solid #bbb;border-radius:6px}
  .mobileBuildHint{font-size:11px;margin-top:6px}
 }
+
+/* Flatout ERP compact density: typography and spacing only. */
+@media screen {
+  body{font-size:14px;line-height:1.4}
+  .side{padding:18px 12px}
+  .logo{margin-bottom:20px}
+  .nav button{font-size:13px;padding:9px 10px}
+  .top{height:68px;padding:0 20px;gap:10px}
+  .content{padding:18px 20px}
+  .cards{gap:10px}
+  .card{padding:13px}
+  .value{font-size:26px}
+  .panel{margin-top:14px}
+  .panel h2{font-size:15px;padding:11px 13px}
+  th,td{font-size:13px;padding:8px 9px}
+  th{font-size:11px}
+  .btn{font-size:13px;padding:7px 11px}
+  .row{gap:8px}
+  .field{margin:9px 0}
+  .field label{font-size:11px;margin-bottom:4px}
+  .field input,.field select{font-size:14px;padding:8px}
+  .grid{gap:10px}
+  .modal{padding:18px}
+  .invoice-sheet{padding:34px}
+  .invoice-title h1{font-size:32px}
+}
+@media screen and (max-width:900px){
+  .content{padding:12px}
+  .top{height:auto;min-height:58px;padding:8px 12px}
+  .cards{gap:9px}
+  .card{padding:11px}
+  .value{font-size:24px}
+  .panel{margin-top:12px}
+  .panel h2{padding:10px 12px}
+  .mobileWorkCard{padding:12px}
+  .mobileCards{gap:9px;margin-top:10px}
+  .mobileCardHeading b{font-size:14px}
+  .mobileFacts{gap:9px;margin:11px 0}
+  .mobileFacts strong{font-size:13px}
+  .mobileStatus{font-size:11px}
+  .mobileEditFields{gap:10px}
+  .mobileEditFields input,.mobileEditFields select,.mobileEditFields textarea,
+  .field input,.field select,.field textarea,
+  .buildDetailFacts input,.buildDetailFacts select,.buildDetailScreen textarea,
+  .mobileBuildQtyLabel input{font-size:16px;min-height:44px}
+  .mobileFullButton{min-height:44px}
+  .buildDetailScreen{padding:12px!important}
+  .buildDetailHeader h1{font-size:23px}
+  .buildDetailFacts>.card{padding:11px}
+  .buildPartsPanel{padding:10px}
+}
