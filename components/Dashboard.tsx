@@ -95,6 +95,22 @@ function displayBuildDate(value:string|null|undefined){
   const [year,month,date]=day.split('-');
   return `${month}/${date}/${year}`;
 }
+// Print a technician-only sheet for the selected build. Do not include pricing or unassigned order items.
+function printTechnicianBuildSheet(build:Build,order:Order|undefined,technician:string,assigned:BuildItem[]){
+  const popup=window.open('','_blank');
+  if(!popup){window.alert('Please allow pop-ups for this site to print the build sheet.');return;}
+  const escapeHtml=(value:unknown)=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]||char));
+  const items=assigned.filter(bi=>bi.build_id===build.id&&Number(bi.qty)>0).map(bi=>{
+    const item=order?.order_items?.find(i=>i.id===bi.order_item_id);
+    return item?{description:item.description,sku:item.sku||'—',vendor:item.vendor||'—',qty:bi.qty}:null;
+  }).filter((item):item is {description:string,sku:string,vendor:string,qty:number}=>item!==null);
+  const rows=items.length?items.map(item=>`<tr><td class="check">&#9633;</td><td>${escapeHtml(item.description)}</td><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.vendor)}</td><td class="qty">${escapeHtml(item.qty)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">No parts have been assigned to this build.</td></tr>';
+  const note=(value:string|null)=>value?.trim()?escapeHtml(value).replace(/\r?\n/g,'<br>'):'<span class="muted">No notes entered</span>';
+  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Build Sheet - ${escapeHtml(build.build_number)}</title><style>
+    @page{size:letter;margin:0.55in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#161616;margin:0;font-size:11px}header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:3px solid #e71d36;padding-bottom:12px;margin-bottom:16px}.brand{font-size:21px;font-weight:900;font-style:italic;letter-spacing:-1px}.brand small{display:block;font-size:9px;letter-spacing:1px;font-style:normal}.heading{text-align:right}.heading h1{font-size:22px;margin:0}.heading div{font-size:11px;margin-top:3px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 20px;padding:14px;background:#f5f5f5;border:1px solid #ddd;border-radius:5px;margin-bottom:20px}.meta div{min-width:0}.meta b{display:block;color:#666;font-size:9px;text-transform:uppercase;margin-bottom:3px}.meta span{font-size:12px;font-weight:600;overflow-wrap:anywhere}h2{font-size:13px;background:#111;color:#fff;padding:9px 11px;margin:18px 0 0}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#eee;font-size:10px;text-align:left}td,th{border:1px solid #d8d8d8;padding:8px 7px;overflow-wrap:anywhere}tr{break-inside:avoid}.check{font-size:19px;text-align:center;width:36px}.qty{text-align:center;width:45px}.empty{text-align:center;color:#777;padding:16px}.notes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}.note{border:1px solid #ddd;border-radius:4px;min-height:86px;padding:10px;overflow-wrap:anywhere;line-height:1.5;break-inside:avoid}.note b{display:block;margin-bottom:8px}.muted{color:#777}.signoff{display:flex;gap:24px;margin-top:30px}.signoff div{flex:1;border-top:1px solid #777;padding-top:6px;font-size:10px;color:#555}.toolbar{padding:12px 0;margin-bottom:12px;display:flex;gap:8px}.toolbar button{border:0;border-radius:4px;padding:10px 14px;background:#111;color:#fff;font-weight:700;cursor:pointer}@media print{.toolbar{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}@media(max-width:600px){.notes{grid-template-columns:1fr}.meta{grid-template-columns:1fr 1fr}}
+    </style></head><body><div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button><button onclick="window.close()">Close</button></div><header><div class="brand">FLATOUT <small>SIM RACING</small></div><div class="heading"><h1>BUILD SHEET</h1><div>${escapeHtml(build.build_number)}</div></div></header><section class="meta"><div><b>Sales Order</b><span>${escapeHtml(order?.order_number||'—')}</span></div><div><b>Build Name</b><span>${escapeHtml(build.name||'—')}</span></div><div><b>Customer</b><span>${escapeHtml(order?.customers?.name||'—')}</span></div><div><b>Technician</b><span>${escapeHtml(technician)}</span></div><div><b>Installation Date</b><span>${escapeHtml(displayBuildDate(build.installation_date))}</span></div><div><b>Build Status</b><span>${escapeHtml(build.canceled_at?'Canceled':build.status)}</span></div></section><h2>PARTS CHECKLIST (${items.length} ITEMS)</h2><table><thead><tr><th style="width:36px">&#10003;</th><th>Item / Description</th><th style="width:22%">SKU</th><th style="width:20%">Vendor</th><th style="width:45px;text-align:center">Qty</th></tr></thead><tbody>${rows}</tbody></table><section class="notes"><div class="note"><b>Build Notes</b>${note(build.build_notes)}</div><div class="note"><b>Installation Notes</b>${note(build.installation_notes)}</div></section><section class="signoff"><div>Technician Signature</div><div>Date Completed</div></section></body></html>`;
+  popup.document.open();popup.document.write(html);popup.document.close();popup.focus();
+}
 export default function Dashboard({email}:{email:string}){
 const s=supabase(),r=useRouter();
 const [tab,setTab]=useState('Dashboard');
@@ -1313,6 +1329,7 @@ return <div className="shell">
         </button>
 
         <div className="row" style={{marginTop:10,flexWrap:'wrap'}}>
+          <button type="button" className="btn secondary" onClick={()=>printTechnicianBuildSheet(selectedBuild,order,technician?.name||'Unassigned',buildItems)}>▣ Print Build Sheet</button>
           {me?.role==='Admin'&&(selectedBuild.canceled_at
             ? <button type="button" className="btn ghost" onClick={()=>void setBuildCancellation(selectedBuild,false)}>↻ Restore Build</button>
             : <button type="button" className="btn ghost" style={{color:'#b91c1c',border:'1px solid #b91c1c'}} onClick={()=>setShowCancelBuildConfirm(true)}>Cancel Build</button>)}
