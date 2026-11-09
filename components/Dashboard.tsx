@@ -199,6 +199,11 @@ const [employeeListPage,setEmployeeListPage]=useState(1);
 const [forecastVendor,setForecastVendor]=useState('All');
 const [forecastPeriod,setForecastPeriod]=useState('90');
 const [forecastUpdated,setForecastUpdated]=useState<Date|null>(null);
+const [analyticsPeriod,setAnalyticsPeriod]=useState('365');
+const [analyticsSearch,setAnalyticsSearch]=useState('');
+const [analyticsPage,setAnalyticsPage]=useState(1);
+const [analyticsSelected,setAnalyticsSelected]=useState<string|null>(null);
+const [analyticsDetailPage,setAnalyticsDetailPage]=useState(1);
 
  const [adjustmentPayment,setAdjustmentPayment]=useState<Payment|null>(null);
  const paymentSubmissionInProgress=useRef(false);
@@ -447,7 +452,7 @@ async function loadForecast(){
     const batch=500;
     for(let offset=0;;offset+=batch){
       const {data,error}=await s.from('orders')
-        .select('id,order_number,status,order_date,created_at,order_items(id,product_id,item_type,description,sku,vendor,qty,sell_price)')
+        .select('id,order_number,status,order_date,created_at,order_items(id,product_id,item_type,description,sku,vendor,qty,sell_price,cost)')
         .neq('status','Draft').order('created_at',{ascending:false}).range(offset,offset+batch-1);
       if(error)throw error;
       const page=(data||[]) as unknown as Order[];
@@ -458,7 +463,7 @@ async function loadForecast(){
   }catch(error){setForecastError(error instanceof Error?error.message:'Unable to load sales history.');}
   finally{setForecastLoading(false);}
 }
-useEffect(()=>{if(module==='Inventory'&&tab==='Inventory Forecast')void loadForecast();},[module,tab]);
+useEffect(()=>{if(module==='Inventory'&&['Inventory Forecast','Product Analytics','Vendor Analytics'].includes(tab))void loadForecast();},[module,tab]);
 const forecastRows=useMemo(()=>{
   const grouped=new Map<string,{key:string,sku:string,name:string,vendor:string,category:string,total:number,revenue:number,last30:number,last90:number,last365:number,period:number,months:Record<string,number>}>();
   const now=new Date();const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
@@ -540,7 +545,7 @@ useEffect(()=>{
    const allowedTabs:Record<string,string[]>={
      Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],
      Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],
-     Builds:['Builds','Build'],Inventory:['Inventory Forecast','Products'],
+     Builds:['Builds','Build'],Inventory:['Inventory Forecast','Product Analytics','Vendor Analytics','Products'],
      Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],
      Employees:['Employees']
    };
@@ -601,7 +606,7 @@ useEffect(()=>{
        me.role==='Technician'?['Builds']:['Sales','Purchases','Builds','Inventory'];
      const nextModule=requestedModule&&allowedModules.includes(requestedModule)?requestedModule:(me.role==='Technician'?'Builds':'Sales');
      const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'};
-     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Inventory Forecast','Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
+     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Inventory Forecast','Product Analytics','Vendor Analytics','Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
      const requestedTab=params.get('erpTab');
      const nextTab=requestedTab&&allowedTabs[nextModule]?.includes(requestedTab)?requestedTab:defaults[nextModule];
      const id=params.get('erpId')||'';
@@ -1219,6 +1224,8 @@ const moduleNavItems:Record<string,string[]> = {
   ],
   Inventory: [
     'Inventory Forecast',
+    'Product Analytics',
+    'Vendor Analytics',
     'Products'
   ],
   Accounting: [
@@ -1256,6 +1263,59 @@ const buildChecklistCounts=(b:Build)=>{
   const completed=keys.filter(key=>buildSummary.some(p=>p.build_id===b.id&&p.task_key===key&&p.completed)).length;
   return {completed,total:keys.length,parts:partKeys.length,verified:partKeys.filter(key=>buildSummary.some(p=>p.build_id===b.id&&p.task_key===key&&p.completed)).length};
 };
+// Read-only analytics are calculated from order-line snapshots, never current catalog prices.
+// Exclude drafts/cancellations; refunds are not item-attributed in the existing schema.
+const analyticsLines=useMemo(()=>{
+  const now=new Date();const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const lines:{id:string,orderId:string,orderNumber:string,date:string,productKey:string,product:string,sku:string,vendor:string,qty:number,revenue:number,cost:number|null}[]=[];
+  for(const order of forecastOrders){
+    if(order.status==='Draft'||/cancelled|canceled/i.test(order.status))continue;
+    const date=(order.order_date||order.created_at||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
+    const age=Math.floor((today.getTime()-new Date(date+'T12:00:00').getTime())/86400000);
+    if(age<0||!Number.isFinite(age)||(analyticsPeriod!=='all'&&age>=Number(analyticsPeriod)))continue;
+    for(const item of order.order_items||[]){
+      if(item.item_type!=='Product')continue;
+      const qty=Number(item.qty),sell=Number(item.sell_price);
+      if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(sell))continue;
+      const rawCost=item.cost===null||item.cost===undefined?null:Number(item.cost);
+      const cost=rawCost!==null&&Number.isFinite(rawCost)?qty*rawCost:null;
+      const productKey=item.product_id?`id:${item.product_id}`:item.sku?.trim()?`sku:${item.sku.trim().toLowerCase()}`:`name:${item.description.trim().toLowerCase()}`;
+      lines.push({id:item.id,orderId:order.id,orderNumber:order.order_number,date,productKey,product:item.description,sku:item.sku||'—',vendor:item.vendor?.trim()||'Unassigned',qty,revenue:qty*sell,cost});
+    }
+  }
+  return lines;
+},[forecastOrders,analyticsPeriod]);
+type AnalyticsRow={key:string,name:string,units:number,revenue:number,cost:number,knownRevenue:number,missingCosts:number,orders:Set<string>,months:Record<string,{revenue:number,units:number}>,lastSale:string};
+const buildAnalyticsRows=(kind:'product'|'vendor')=>{
+  const map=new Map<string,AnalyticsRow>();
+  for(const line of analyticsLines){
+    const key=kind==='vendor'?line.vendor.toLowerCase():line.productKey;
+    let row=map.get(key);
+    if(!row){row={key,name:kind==='vendor'?line.vendor:line.product,units:0,revenue:0,cost:0,knownRevenue:0,missingCosts:0,orders:new Set(),months:{},lastSale:''};map.set(key,row);}
+    row.units+=line.qty;row.revenue+=line.revenue;
+    if(line.cost===null)row.missingCosts++;else{row.cost+=line.cost;row.knownRevenue+=line.revenue;}
+    row.orders.add(line.orderId);
+    const month=line.date.slice(0,7);
+    if(!row.months[month])row.months[month]={revenue:0,units:0};
+    row.months[month].revenue+=line.revenue;row.months[month].units+=line.qty;
+    if(line.date>row.lastSale)row.lastSale=line.date;
+  }
+  return [...map.values()].sort((a,b)=>b.revenue-a.revenue||a.name.localeCompare(b.name));
+};
+const productAnalyticsRows=buildAnalyticsRows('product');
+const vendorAnalyticsRows=buildAnalyticsRows('vendor');
+const analyticsIsVendor=tab==='Vendor Analytics';
+const analyticsRows=(analyticsIsVendor?vendorAnalyticsRows:productAnalyticsRows).filter(row=>{
+  if(!analyticsSearch.trim())return true;
+  const term=analyticsSearch.toLowerCase();
+  return row.name.toLowerCase().includes(term)||analyticsLines.some(l=>(analyticsIsVendor?l.vendor.toLowerCase()===row.key:l.productKey===row.key)&&`${l.sku} ${l.product} ${l.vendor}`.toLowerCase().includes(term));
+});
+const analyticsSafePage=Math.min(analyticsPage,Math.max(1,Math.ceil(analyticsRows.length/LIST_PAGE_SIZE)));
+const analyticsDetail=(analyticsIsVendor?vendorAnalyticsRows:productAnalyticsRows).find(row=>row.key===analyticsSelected);
+const analyticsDetailLines=analyticsDetail?analyticsLines.filter(l=>analyticsIsVendor?l.vendor.toLowerCase()===analyticsDetail.key:l.productKey===analyticsDetail.key).sort((a,b)=>b.date.localeCompare(a.date)):[];
+const analyticsSafeDetailPage=Math.min(analyticsDetailPage,Math.max(1,Math.ceil(analyticsDetailLines.length/LIST_PAGE_SIZE)));
+const analyticsMoney=(amount:number)=>amount.toLocaleString('en-US',{style:'currency',currency:'USD'});
 const filteredForecastRows=forecastRows.filter(r=>(forecastVendor==='All'||r.vendor===forecastVendor)&&`${r.sku} ${r.name} ${r.vendor}`.toLowerCase().includes(forecastSearch.toLowerCase()));
 const safeForecastPage=Math.min(forecastPage,Math.max(1,Math.ceil(filteredForecastRows.length/LIST_PAGE_SIZE)));
 const navItems = moduleNavItems[module] || ['Dashboard'];
@@ -1850,7 +1910,37 @@ onChange={e=>{
     </div>
   </div>
 </>}
-{module==='Inventory'&&tab==='Inventory Forecast'&&<div className="panel" style={{padding:16}}>
+{module==='Inventory'&&['Product Analytics','Vendor Analytics'].includes(tab)&&<div className="panel" style={{padding:16}}>
+  <div className="row" style={{justifyContent:'space-between',gap:12,flexWrap:'wrap',marginBottom:14}}>
+    <div><h2 style={{margin:0}}>{tab}</h2><p className="muted" style={{margin:'5px 0'}}>Sales Order retail revenue, recorded line-item costs, and gross profit. Purchase Orders are not required.</p></div>
+    <button type="button" className="btn secondary" disabled={forecastLoading} onClick={()=>void loadForecast()}>{forecastLoading?'Loading…':'Refresh Analytics'}</button>
+  </div>
+  {forecastError&&<p role="alert" style={{color:'#b91c1c'}}>Unable to load analytics: {forecastError}</p>}
+  <div className="row" style={{gap:10,flexWrap:'wrap',marginBottom:14}}>
+    <select aria-label="Reporting period" value={analyticsPeriod} onChange={e=>{setAnalyticsPeriod(e.target.value);setAnalyticsPage(1);setAnalyticsSelected(null)}}>
+      <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option><option value="all">All time</option>
+    </select>
+    <input aria-label="Search analytics" placeholder={analyticsIsVendor?'Search vendor or product…':'Search product, SKU, or vendor…'} value={analyticsSearch} onChange={e=>{setAnalyticsSearch(e.target.value);setAnalyticsPage(1)}} style={{minWidth:220,flex:'1 1 220px'}}/>
+  </div>
+  {(()=>{const totalRevenue=analyticsLines.reduce((sum,l)=>sum+l.revenue,0);const totalCost=analyticsLines.reduce((sum,l)=>sum+(l.cost||0),0);const missing=analyticsLines.filter(l=>l.cost===null).length;const cards=[['Retail Revenue',analyticsMoney(totalRevenue)],['Recorded Cost',missing?'Incomplete':analyticsMoney(totalCost)],['Gross Profit',missing?'Incomplete':analyticsMoney(totalRevenue-totalCost)],['Gross Margin',missing?'Incomplete':totalRevenue?`${((totalRevenue-totalCost)/totalRevenue*100).toFixed(1)}%`:'—']];return <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>{cards.map(([label,value])=><div key={label} style={{border:'1px solid #ddd',padding:'10px 14px',borderRadius:6,minWidth:160,flex:'1 1 160px'}}><div className="muted">{label}</div><b style={{fontSize:20}}>{value}</b></div>)}</div>})()}
+  <p className="muted" style={{fontSize:12}}>Includes non-draft, non-canceled Sales Orders; figures are based on saved line-item prices and costs, excluding tax and shipping. Discounts and refunds are not allocated to individual products or vendors. Missing costs are not treated as zero. {forecastUpdated?`Refreshed ${forecastUpdated.toLocaleTimeString()}.`:''}</p>
+  {analyticsDetail?<div style={{marginTop:16}}>
+    <button type="button" className="btn secondary" onClick={()=>{setAnalyticsSelected(null);setAnalyticsDetailPage(1)}} style={{marginBottom:12}}>← All {analyticsIsVendor?'Vendors':'Products'}</button>
+    <h3>{analyticsDetail.name}</h3>
+    <div className="row" style={{gap:14,flexWrap:'wrap',marginBottom:12}}><span><b>{analyticsDetail.units}</b> units</span><span><b>{analyticsMoney(analyticsDetail.revenue)}</b> revenue</span><span><b>{analyticsDetail.orders.size}</b> orders</span><span>Last sale: <b>{analyticsDetail.lastSale||'—'}</b></span></div>
+    <div className="row" style={{gap:14,flexWrap:'wrap',marginBottom:16}}><span>Our cost: <b>{analyticsDetail.missingCosts?'Incomplete':analyticsMoney(analyticsDetail.cost)}</b></span><span>Gross profit: <b>{analyticsDetail.missingCosts?'Incomplete':analyticsMoney(analyticsDetail.revenue-analyticsDetail.cost)}</b></span><span>Margin: <b>{analyticsDetail.missingCosts?'Incomplete':analyticsDetail.revenue?`${((analyticsDetail.revenue-analyticsDetail.cost)/analyticsDetail.revenue*100).toFixed(1)}%`:'—'}</b></span></div>
+    <h3>Monthly Sales</h3>
+    <div style={{overflowX:'auto'}}><table><thead><tr><th>Month</th><th style={{textAlign:'right'}}>Units</th><th style={{textAlign:'right'}}>Revenue</th></tr></thead><tbody>{Object.entries(analyticsDetail.months).sort(([a],[b])=>b.localeCompare(a)).map(([month,v])=><tr key={month}><td>{month}</td><td style={{textAlign:'right'}}>{v.units}</td><td style={{textAlign:'right'}}>{analyticsMoney(v.revenue)}</td></tr>)}</tbody></table></div>
+    {analyticsIsVendor&&<><h3 style={{marginTop:20}}>Products Sold by Vendor</h3><div style={{overflowX:'auto'}}><table><thead><tr><th>Product</th><th style={{textAlign:'right'}}>Units</th><th style={{textAlign:'right'}}>Revenue</th></tr></thead><tbody>{(()=>{const byProduct=new Map<string,{name:string,units:number,revenue:number}>();for(const l of analyticsDetailLines){const row=byProduct.get(l.productKey)||{name:l.product,units:0,revenue:0};row.units+=l.qty;row.revenue+=l.revenue;byProduct.set(l.productKey,row);}return [...byProduct.entries()].sort((a,b)=>b[1].revenue-a[1].revenue).map(([key,row])=><tr key={key}><td>{row.name}</td><td style={{textAlign:'right'}}>{row.units}</td><td style={{textAlign:'right'}}>{analyticsMoney(row.revenue)}</td></tr>);})()}</tbody></table></div></>}
+    <h3 style={{marginTop:20}}>Sales Order History</h3>
+    <div style={{overflowX:'auto'}}><table><thead><tr><th>Date</th><th>Sales Order</th><th>Product</th><th style={{textAlign:'right'}}>Qty</th><th style={{textAlign:'right'}}>Retail</th><th style={{textAlign:'right'}}>Our Cost</th><th style={{textAlign:'right'}}>Gross Profit</th></tr></thead><tbody>{analyticsDetailLines.slice((analyticsSafeDetailPage-1)*LIST_PAGE_SIZE,analyticsSafeDetailPage*LIST_PAGE_SIZE).map(l=><tr key={l.id}><td>{l.date}</td><td>{l.orderNumber}</td><td>{l.product}</td><td style={{textAlign:'right'}}>{l.qty}</td><td style={{textAlign:'right'}}>{analyticsMoney(l.revenue)}</td><td style={{textAlign:'right'}}>{l.cost===null?'Missing':analyticsMoney(l.cost)}</td><td style={{textAlign:'right'}}>{l.cost===null?'—':analyticsMoney(l.revenue-l.cost)}</td></tr>)}</tbody></table></div>
+    <ListPagination page={analyticsSafeDetailPage} onPageChange={setAnalyticsDetailPage} total={analyticsDetailLines.length}/>
+  </div>:<>
+    <div style={{overflowX:'auto'}}><table style={{minWidth:860,width:'100%'}}><thead><tr><th>{analyticsIsVendor?'Vendor':'Product'}</th><th style={{textAlign:'right'}}>Units Sold</th><th style={{textAlign:'right'}}>Orders</th><th style={{textAlign:'right'}}>Retail Revenue</th><th style={{textAlign:'right'}}>Our Cost</th><th style={{textAlign:'right'}}>Gross Profit</th><th style={{textAlign:'right'}}>Margin</th><th>Last Sale</th></tr></thead><tbody>{analyticsRows.slice((analyticsSafePage-1)*LIST_PAGE_SIZE,analyticsSafePage*LIST_PAGE_SIZE).map(row=><tr key={row.key} onClick={()=>{setAnalyticsSelected(row.key);setAnalyticsDetailPage(1)}} style={{cursor:'pointer'}} title="View sales history"><td><b>{row.name}</b></td><td style={{textAlign:'right'}}>{row.units}</td><td style={{textAlign:'right'}}>{row.orders.size}</td><td style={{textAlign:'right'}}>{analyticsMoney(row.revenue)}</td><td style={{textAlign:'right'}}>{row.missingCosts?'Incomplete':analyticsMoney(row.cost)}</td><td style={{textAlign:'right'}}>{row.missingCosts?'Incomplete':analyticsMoney(row.revenue-row.cost)}</td><td style={{textAlign:'right'}}>{row.missingCosts?'—':row.revenue?`${((row.revenue-row.cost)/row.revenue*100).toFixed(1)}%`:'—'}</td><td>{row.lastSale}</td></tr>)}{!forecastLoading&&analyticsRows.length===0&&<tr><td colSpan={8} className="muted" style={{textAlign:'center',padding:20}}>No qualifying sales found.</td></tr>}</tbody></table></div>
+    <ListPagination page={analyticsSafePage} onPageChange={setAnalyticsPage} total={analyticsRows.length}/>
+  </>}
+</div>}
+{module==='Inventory'&&['Inventory Forecast','Product Analytics','Vendor Analytics'].includes(tab)&&<div className="panel" style={{padding:16}}>
   <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12,marginBottom:14}}>
     <div><h2 style={{margin:0}}>Inventory Forecast</h2><p className="muted" style={{margin:'5px 0'}}>Corbeau-style product demand reporting. Physical stock tracking is not active.</p></div>
     <button type="button" className="btn secondary" onClick={()=>void loadForecast()} disabled={forecastLoading}>{forecastLoading?'Loading…':'Refresh Sales History'}</button>
