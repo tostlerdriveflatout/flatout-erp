@@ -302,6 +302,7 @@ const [leadQuickCustomerOpen,setLeadQuickCustomerOpen]=useState(false);
 const [leadSaving,setLeadSaving]=useState(false);
 const [leadSearch,setLeadSearch]=useState('');
 const [leadStageFilter,setLeadStageFilter]=useState('Active');
+const [leadPage,setLeadPage]=useState(1);
 // Independent history dataset: order-list pagination must not affect the forecast.
 const [forecastOrders,setForecastOrders]=useState<Order[]>([]);
 const [forecastLoading,setForecastLoading]=useState(false);
@@ -1569,6 +1570,8 @@ const visibleLeads=leads.filter(l=>{
   if(!a.follow_up_date&&b.follow_up_date)return 1;
   return b.created_at.localeCompare(a.created_at);
 });
+const safeLeadPage=Math.min(leadPage,Math.max(1,Math.ceil(visibleLeads.length/LIST_PAGE_SIZE)));
+const pagedLeads=visibleLeads.slice((safeLeadPage-1)*LIST_PAGE_SIZE,safeLeadPage*LIST_PAGE_SIZE);
 return <div className="shell">
 <style>{FX_CSS}</style>
   <aside className={`side ${mobileMenuOpen?"mobile-open":""}`}>
@@ -2048,8 +2051,8 @@ onChange={e=>{
   <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
     <button className="btn" onClick={()=>{setLeadCustomerName('');setLeadCustomerId('');setLeadQuickCustomerOpen(false);setModal('lead')}}>+ New Lead</button>
     <div className="row">
-      <input placeholder="Search leads..." value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} style={{padding:9,width:260}}/>
-      <select value={leadStageFilter} onChange={e=>setLeadStageFilter(e.target.value)}>
+      <input placeholder="Search leads..." value={leadSearch} onChange={e=>{setLeadSearch(e.target.value);setLeadPage(1);}} style={{padding:9,width:260}}/>
+      <select value={leadStageFilter} onChange={e=>{setLeadStageFilter(e.target.value);setLeadPage(1);}}>
         <option value="Active">Active leads</option>
         <option value="Due">Follow-up due</option>
         <option value="All">All leads</option>
@@ -2065,7 +2068,7 @@ onChange={e=>{
         <thead><tr><th>Customer</th><th>Interested in</th><th>Stage</th><th>Follow-up</th><th>Latest note</th><th></th></tr></thead>
         <tbody>
           {visibleLeads.length===0&&<tr><td colSpan={6} className="muted">{leads.length===0?'No leads yet. Click + New Lead to add one.':'No leads match this filter.'}</td></tr>}
-          {visibleLeads.map(l=>{
+          {pagedLeads.map(l=>{
             const latest=leadNotes.find(n=>n.lead_id===l.id);
             return <tr key={l.id} className="fx-row" tabIndex={0} aria-label={`View lead ${l.customers?.name||''}`} onClick={()=>{setSelectedLeadId(l.id);setModal('viewLead')}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedLeadId(l.id);setModal('viewLead')}}}>
               <td><b>{l.customers?.name||'—'}</b>{l.customers?.company?<div className="muted">{l.customers.company}</div>:null}</td>
@@ -2078,6 +2081,7 @@ onChange={e=>{
           })}
         </tbody>
       </table>
+      <ListPagination page={safeLeadPage} onPageChange={setLeadPage} total={visibleLeads.length}/>
     </div>}
 </>}
 {tab==='Customers'&&<>
