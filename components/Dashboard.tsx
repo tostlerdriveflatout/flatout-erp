@@ -183,6 +183,7 @@ select.fx-sel-bad{background-color:#fee2e2!important;color:#7f1d1d!important}
 .fx-row:hover .fx-link{text-decoration:underline}
 .btn.fx-selected{background:#fff!important;color:#111!important;box-shadow:inset 0 0 0 2px #111!important}
 .shell .content{max-width:1600px}
+.mobileHeader .logo{height:30px!important;width:auto!important;max-width:160px!important;margin:0!important;padding:0!important;display:block}
 `;
 
 export default function Dashboard({email}:{email:string}){
@@ -222,6 +223,8 @@ const [customers,setCustomers]=useState<Customer[]>([]);
 const [employees,setEmployees]=useState<Employee[]>([]);
 const [products,setProducts]=useState<Product[]>([]);
 const [orders,setOrders]=useState<Order[]>([]);
+// Full order list used only for lookups (Builds, Purchasing). The Orders/Quotations pages replace `orders` with one page at a time.
+const [allOrders,setAllOrders]=useState<Order[]>([]);
 // Independent history dataset: order-list pagination must not affect the forecast.
 const [forecastOrders,setForecastOrders]=useState<Order[]>([]);
 const [forecastLoading,setForecastLoading]=useState(false);
@@ -358,6 +361,7 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   setEmployees((e.data || []) as Employee[])
   setProducts((p.data || []) as Product[])
   setOrders((o.data || []) as any)
+  setAllOrders((o.data || []) as any)
   setPurchaseOrders((po.data || []) as any)
   setBuilds((b.data || []) as Build[])
   setBuildItems((bi.data||[]) as BuildItem[])
@@ -1382,7 +1386,7 @@ return <div className="shell">
   </aside>
 
   <main className="main">
-    <div className="mobileHeader"><button type="button" className="btn secondary mobileMenuToggle" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}>{mobileMenuOpen?"✕ Close":"☰ Menu"}</button><strong>FLATOUT ERP</strong><span>{module}</span></div>
+    <div className="mobileHeader"><button type="button" className="btn secondary mobileMenuToggle" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}>{mobileMenuOpen?"✕ Close":"☰ Menu"}</button><img className="logo" src="/flatout-logo.svg" alt="Flatout Sim Racing ERP"/><span>{module}</span></div>
     <div
       className="moduleNav"
       style={{
@@ -1496,7 +1500,7 @@ return <div className="shell">
     <div className="mobileCards">
       {visibleBuilds.length===0&&<div className="muted">No builds have been created yet.</div>}
       {pagedBuilds.map(b=>{
-        const order=orders.find(o=>o.id===b.order_id);
+        const order=allOrders.find(o=>o.id===b.order_id);
         const tech=employees.find(e=>e.id===b.assigned_technician_id);
         return <div className="mobileWorkCard" key={b.id}>
           <div className="mobileCardHeading"><div><b>{b.build_number}</b><div className="muted">{b.name||'Simulator Build'}</div></div><span className="mobileStatus">{b.canceled_at?'Canceled':b.status}</span></div>
@@ -1532,7 +1536,7 @@ return <div className="shell">
             </tr>
           ) : (
             pagedBuilds.map(b=>{
-              const order=orders.find(o=>o.id===b.order_id)
+              const order=allOrders.find(o=>o.id===b.order_id)
               const technician=employees.find(
                 e=>e.id===b.assigned_technician_id
               )
@@ -1570,7 +1574,7 @@ return <div className="shell">
   </section>
 }
   {tab==='Build'&&selectedBuild&&(!technicianOnly||(!selectedBuild.canceled_at&&selectedBuild.assigned_technician_id===me?.id))&&(canViewCanceledBuilds||!selectedBuild.canceled_at)&&(()=>{
-  const order=orders.find(o=>o.id===selectedBuild.order_id)
+  const order=allOrders.find(o=>o.id===selectedBuild.order_id)
   const technician=employees.find(e=>e.id===selectedBuild.assigned_technician_id)
 
   return <section className="card buildDetailScreen">
@@ -2208,7 +2212,7 @@ onChange={e=>{
     </div>
   </div>
 </>}
-      {tab==='Purchasing'&&<PurchasingView orders={confirmedOrders} updateItem={updateItem} createPurchaseOrder={createPurchaseOrder} openOrder={(o:any)=>{setSelected(o);setSelectedPO(null);setTab('Order')}}/>}
+      {tab==='Purchasing'&&<PurchasingView orders={allOrders.filter(o=>o.status!=='Draft')} updateItem={updateItem} createPurchaseOrder={createPurchaseOrder} openOrder={(o:any)=>{setSelected(o);setSelectedPO(null);setTab('Order')}}/>}
 {tab==='Purchase Orders'&&<PurchaseOrdersView purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setSelected(null);setTab('Purchase Order')}}/>}
 {tab==='Purchase Order'&&selectedPO&&<PurchaseOrderView po={selectedPO} back={()=>{setSelectedPO(null);setTab('Purchase Orders')}}/>}
 {tab==='Order'&&selected&&<OrderView o={selected} products={products} totals={totals(selected)} addProduct={addProduct} addOther={()=>setModal('other')} openInvoice={openInvoice} openQuote={()=>setTab('Quote')} dup={dup} del={del} updateItem={updateItem} updateOrderDetails={updateOrderDetails} updateOrderStatus={updateOrderStatus} createPurchaseOrder={createPurchaseOrder} purchaseOrders={purchaseOrders} openPO={(po:any)=>{setSelectedPO(po);setTab('Purchase Order')}} addOrderNote={addOrderNote} createBuild={createBuild} builds={builds} openBuild={(b:Build)=>{setSelectedBuild(b);setModule('Builds');setTab('Build');}}/>}
