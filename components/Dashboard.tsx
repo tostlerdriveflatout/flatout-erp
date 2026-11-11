@@ -155,12 +155,22 @@ function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{le
   const [follow,setFollow]=useState(lead.follow_up_date||'');
   const [noteDraft,setNoteDraft]=useState('');
   const [busy,setBusy]=useState(false);
-  const dirty=interest!==(lead.interest||'')||source!==(lead.source||'')||stage!==lead.stage||follow!==(lead.follow_up_date||'');
+  const [confirmingDelete,setConfirmingDelete]=useState(false);
   const c=lead.customers;
-  async function save(){
-    if(follow&&(!/^\d{4}-\d{2}-\d{2}$/.test(follow)||Number.isNaN(Date.parse(follow+'T12:00:00')))){alert('Please enter a valid follow-up date.');return;}
-    setBusy(true);
-    try{await onSave({interest:interest.trim()||null,source:source.trim()||null,stage,follow_up_date:follow||null});}finally{setBusy(false);}
+  // Fields save automatically. If a save fails, the field goes back to the last saved value.
+  async function commit(patch:Record<string,any>){
+    const ok=await onSave(patch);
+    if(!ok){setInterest(lead.interest||'');setSource(lead.source||'');setStage(lead.stage);setFollow(lead.follow_up_date||'');}
+  }
+  function saveText(field:'interest'|'source',value:string){
+    const next=value.trim()||null;
+    if(next===(lead[field]||null))return;
+    void commit({[field]:next});
+  }
+  function saveFollow(value:string){
+    if(value===(lead.follow_up_date||''))return;
+    if(value&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number(value.slice(0,4))<2000||Number.isNaN(Date.parse(value+'T12:00:00'))))return;
+    void commit({follow_up_date:value||null});
   }
   async function addNote(){
     const text=noteDraft.trim();
@@ -177,16 +187,13 @@ function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{le
       <LeadBadge stage={lead.stage}/>
     </div>
     <div className="grid" style={{marginTop:12}}>
-      <div className="field"><label>Interested in</label><input value={interest} onChange={e=>setInterest(e.target.value)} placeholder="e.g. Sim rig"/></div>
-      <div className="field"><label>Source</label><input list="lead-detail-sources" value={source} onChange={e=>setSource(e.target.value)}/><datalist id="lead-detail-sources">{LEAD_SOURCES.map(x=><option key={x} value={x}/>)}</datalist></div>
-      <div className="field"><label>Stage</label><select value={stage} onChange={e=>setStage(e.target.value)}>{LEAD_STAGES.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
-      <div className="field"><label>Follow-up date</label><input type="date" value={follow} onChange={e=>setFollow(e.target.value)}/></div>
+      <div className="field"><label>Interested in</label><input value={interest} onChange={e=>setInterest(e.target.value)} onBlur={e=>saveText('interest',e.target.value)} placeholder="e.g. Sim rig"/></div>
+      <div className="field"><label>Source</label><input list="lead-detail-sources" value={source} onChange={e=>setSource(e.target.value)} onBlur={e=>saveText('source',e.target.value)}/><datalist id="lead-detail-sources">{LEAD_SOURCES.map(x=><option key={x} value={x}/>)}</datalist></div>
+      <div className="field"><label>Stage</label><select value={stage} onChange={e=>{setStage(e.target.value);void commit({stage:e.target.value});}}>{LEAD_STAGES.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
+      <div className="field"><label>Follow-up date</label><input type="date" value={follow} onChange={e=>{setFollow(e.target.value);saveFollow(e.target.value);}} onBlur={e=>saveFollow(e.target.value)}/></div>
     </div>
-    <div className="row" style={{justifyContent:'flex-end',marginTop:4}}>
-      <button type="button" className="btn secondary" onClick={onClose}>Close</button>
-      <button type="button" className="btn" disabled={busy||!dirty} onClick={save}>{busy?'Saving...':'Save Changes'}</button>
-    </div>
-    <h3 style={{marginTop:18}}>Notes</h3>
+    <p className="muted" style={{margin:'0 0 4px',fontSize:12}}>Changes save automatically.</p>
+    <h3 style={{marginTop:14}}>Notes</h3>
     <div className="field" style={{marginTop:6}}><textarea rows={3} value={noteDraft} onChange={e=>setNoteDraft(e.target.value)} placeholder="Add a note about this lead..."/></div>
     <div className="row" style={{justifyContent:'flex-end'}}><button type="button" className="btn secondary" disabled={busy||!noteDraft.trim()} onClick={addNote}>Add Note</button></div>
     <div style={{marginTop:10}}>
@@ -198,8 +205,23 @@ function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{le
     <div className="row" style={{justifyContent:'space-between',marginTop:16,borderTop:'1px solid #e5e7eb',paddingTop:14}}>
       {lead.order_id
         ?<button type="button" className="btn" disabled={busy} onClick={async()=>{setBusy(true);try{await onConvert();}finally{setBusy(false);}}}>Open Quotation →</button>
-        :<button type="button" className="btn" disabled={busy||dirty} title={dirty?'Save your changes first':''} onClick={async()=>{setBusy(true);try{await onConvert();}finally{setBusy(false);}}}>Convert to Quotation</button>}
-      <button type="button" className="btn secondary" disabled={busy} onClick={onDelete}>Delete Lead</button>
+        :<button type="button" className="btn" disabled={busy} onClick={async()=>{setBusy(true);try{await onConvert();}finally{setBusy(false);}}}>Convert to Quotation</button>}
+      <button type="button" className="btn secondary" onClick={onClose}>Close</button>
+    </div>
+    <div style={{marginTop:22,padding:'12px 14px',border:'1px solid #fca5a5',background:'#fef2f2',borderRadius:8}}>
+      {!confirmingDelete
+        ?<div className="row" style={{justifyContent:'space-between',alignItems:'center',gap:10}}>
+          <span style={{fontSize:13,color:'#7f1d1d'}}>Delete this lead and all of its notes.</span>
+          <button type="button" className="btn" style={{background:'#fff',color:'#b91c1c',boxShadow:'inset 0 0 0 2px #b91c1c',fontWeight:700}} disabled={busy} onClick={()=>setConfirmingDelete(true)}>Delete Lead…</button>
+        </div>
+        :<div>
+          <div style={{fontWeight:700,color:'#7f1d1d',marginBottom:4}}>Delete this lead permanently?</div>
+          <div style={{fontSize:13,color:'#7f1d1d',marginBottom:10}}>This cannot be undone. The customer and any quotation are not affected.</div>
+          <div className="row" style={{justifyContent:'flex-end',gap:8}}>
+            <button type="button" className="btn secondary" onClick={()=>setConfirmingDelete(false)}>Keep Lead</button>
+            <button type="button" className="btn" style={{background:'#b91c1c',color:'#fff'}} disabled={busy} onClick={async()=>{setBusy(true);try{await onDelete();}finally{setBusy(false);}}}>Yes, Delete Lead</button>
+          </div>
+        </div>}
     </div>
   </form>;
 }
@@ -1039,8 +1061,15 @@ async function createLead(fd:FormData){
   }
 }
 async function updateLead(id:string,patch:Record<string,any>){
-  const {error}=await s.from('leads').update({...patch,updated_at:new Date().toISOString()}).eq('id',id);
-  if(error){alert(`Lead not saved: ${error.message}`);return false;}
+  beginAutoSave();
+  const {data,error}=await s.from('leads').update({...patch,updated_at:new Date().toISOString()}).eq('id',id).select('id');
+  if(error||!data||data.length===0){
+    const msg=error?.message||'No rows were updated (possible permission problem).';
+    finishAutoSave({message:msg});
+    alert(`Lead not saved: ${msg}`);
+    return false;
+  }
+  finishAutoSave();
   await loadLeads();
   return true;
 }
@@ -1051,7 +1080,6 @@ async function addLeadNote(id:string,note:string){
   return true;
 }
 async function deleteLead(lead:Lead){
-  if(!confirm(`Delete the lead for ${lead.customers?.name||'this customer'}? Its notes will be deleted too. The customer and any quotation are not affected.`))return;
   const {error}=await s.from('leads').delete().eq('id',lead.id);
   if(error){alert(`Lead not deleted: ${error.message}`);return;}
   setModal('');
