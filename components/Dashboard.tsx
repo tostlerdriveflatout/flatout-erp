@@ -138,6 +138,71 @@ function TechnicianChecklist({build,order,assigned,progress,onToggle,saving}:{bu
   {build.canceled_at&&<p className="muted">Canceled builds are read-only.</p>}
  </div>
 }
+type LeadCustomer={name:string,company:string|null,email:string|null,phone:string|null};
+type Lead={id:string,customer_id:string,interest:string|null,source:string|null,stage:string,follow_up_date:string|null,order_id:string|null,created_at:string,updated_at:string,customers?:LeadCustomer|null};
+type LeadNote={id:string,lead_id:string,note:string,author:string|null,created_at:string};
+const LEAD_STAGES=['New','Contacted','Not ready','Quoted','Won','Lost'];
+const LEAD_ACTIVE_STAGES=['New','Contacted','Not ready','Quoted'];
+const LEAD_SOURCES=['Referral','Website','Social media','Phone call','Event','Repeat customer','Other'];
+function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function fmtLeadDate(d:string|null|undefined){if(!d)return '—';const [y,m,day]=d.split('-');return `${m}/${day}/${y}`}
+function leadTone(stage:string){return stage==='Won'?'ok':stage==='Not ready'?'warn':stage==='Lost'?'bad':stage==='Quoted'?'neutral':'info'}
+function LeadBadge({stage}:{stage:string}){return <span className={`fx-badge fx-${leadTone(stage)}`}>{stage}</span>}
+function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{lead:Lead,notes:LeadNote[],onSave:(patch:Record<string,any>)=>Promise<boolean>,onAddNote:(text:string)=>Promise<boolean>,onConvert:()=>Promise<void>,onDelete:()=>Promise<void>,onClose:()=>void}){
+  const [interest,setInterest]=useState(lead.interest||'');
+  const [source,setSource]=useState(lead.source||'');
+  const [stage,setStage]=useState(lead.stage);
+  const [follow,setFollow]=useState(lead.follow_up_date||'');
+  const [noteDraft,setNoteDraft]=useState('');
+  const [busy,setBusy]=useState(false);
+  const dirty=interest!==(lead.interest||'')||source!==(lead.source||'')||stage!==lead.stage||follow!==(lead.follow_up_date||'');
+  const c=lead.customers;
+  async function save(){
+    if(follow&&(!/^\d{4}-\d{2}-\d{2}$/.test(follow)||Number.isNaN(Date.parse(follow+'T12:00:00')))){alert('Please enter a valid follow-up date.');return;}
+    setBusy(true);
+    try{await onSave({interest:interest.trim()||null,source:source.trim()||null,stage,follow_up_date:follow||null});}finally{setBusy(false);}
+  }
+  async function addNote(){
+    const text=noteDraft.trim();
+    if(!text)return;
+    setBusy(true);
+    try{if(await onAddNote(text))setNoteDraft('');}finally{setBusy(false);}
+  }
+  return <form onSubmit={e=>e.preventDefault()}>
+    <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start'}}>
+      <div>
+        <h2 style={{marginBottom:4}}>{c?.name||'Lead'}</h2>
+        <div className="muted">{[c?.company,c?.phone,c?.email].filter(Boolean).join(' · ')||'No contact details on file'}</div>
+      </div>
+      <LeadBadge stage={lead.stage}/>
+    </div>
+    <div className="grid" style={{marginTop:12}}>
+      <div className="field"><label>Interested in</label><input value={interest} onChange={e=>setInterest(e.target.value)} placeholder="e.g. Sim rig"/></div>
+      <div className="field"><label>Source</label><input list="lead-detail-sources" value={source} onChange={e=>setSource(e.target.value)}/><datalist id="lead-detail-sources">{LEAD_SOURCES.map(x=><option key={x} value={x}/>)}</datalist></div>
+      <div className="field"><label>Stage</label><select value={stage} onChange={e=>setStage(e.target.value)}>{LEAD_STAGES.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
+      <div className="field"><label>Follow-up date</label><input type="date" value={follow} onChange={e=>setFollow(e.target.value)}/></div>
+    </div>
+    <div className="row" style={{justifyContent:'flex-end',marginTop:4}}>
+      <button type="button" className="btn secondary" onClick={onClose}>Close</button>
+      <button type="button" className="btn" disabled={busy||!dirty} onClick={save}>{busy?'Saving...':'Save Changes'}</button>
+    </div>
+    <h3 style={{marginTop:18}}>Notes</h3>
+    <div className="field" style={{marginTop:6}}><textarea rows={3} value={noteDraft} onChange={e=>setNoteDraft(e.target.value)} placeholder="Add a note about this lead..."/></div>
+    <div className="row" style={{justifyContent:'flex-end'}}><button type="button" className="btn secondary" disabled={busy||!noteDraft.trim()} onClick={addNote}>Add Note</button></div>
+    <div style={{marginTop:10}}>
+      {notes.length===0?<p className="muted">No notes yet.</p>:notes.map(n=><div key={n.id} style={{borderTop:'1px solid #e5e7eb',padding:'8px 0'}}>
+        <div className="muted" style={{fontSize:12}}>{new Date(n.created_at).toLocaleString('en-US',{month:'numeric',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}{n.author?` · ${n.author}`:''}</div>
+        <div style={{whiteSpace:'pre-wrap'}}>{n.note}</div>
+      </div>)}
+    </div>
+    <div className="row" style={{justifyContent:'space-between',marginTop:16,borderTop:'1px solid #e5e7eb',paddingTop:14}}>
+      {lead.order_id
+        ?<button type="button" className="btn" disabled={busy} onClick={async()=>{setBusy(true);try{await onConvert();}finally{setBusy(false);}}}>Open Quotation →</button>
+        :<button type="button" className="btn" disabled={busy||dirty} title={dirty?'Save your changes first':''} onClick={async()=>{setBusy(true);try{await onConvert();}finally{setBusy(false);}}}>Convert to Quotation</button>}
+      <button type="button" className="btn secondary" disabled={busy} onClick={onDelete}>Delete Lead</button>
+    </div>
+  </form>;
+}
 const LIST_PAGE_SIZE=50;
 function ListPagination({page,onPageChange,total,pageSize=LIST_PAGE_SIZE}: {page:number,onPageChange:(page:number)=>void,total:number,pageSize?:number}){
   const pages=Math.max(1,Math.ceil(total/pageSize));
@@ -225,6 +290,18 @@ const [products,setProducts]=useState<Product[]>([]);
 const [orders,setOrders]=useState<Order[]>([]);
 // Full order list used only for lookups (Builds, Purchasing). The Orders/Quotations pages replace `orders` with one page at a time.
 const [allOrders,setAllOrders]=useState<Order[]>([]);
+// Leads: own full customer list for the picker (the Customers page replaces `customers` one page at a time).
+const [allCustomers,setAllCustomers]=useState<Customer[]>([]);
+const [leads,setLeads]=useState<Lead[]>([]);
+const [leadNotes,setLeadNotes]=useState<LeadNote[]>([]);
+const [leadsError,setLeadsError]=useState('');
+const [selectedLeadId,setSelectedLeadId]=useState('');
+const [leadCustomerName,setLeadCustomerName]=useState('');
+const [leadCustomerId,setLeadCustomerId]=useState('');
+const [leadQuickCustomerOpen,setLeadQuickCustomerOpen]=useState(false);
+const [leadSaving,setLeadSaving]=useState(false);
+const [leadSearch,setLeadSearch]=useState('');
+const [leadStageFilter,setLeadStageFilter]=useState('Active');
 // Independent history dataset: order-list pagination must not affect the forecast.
 const [forecastOrders,setForecastOrders]=useState<Order[]>([]);
 const [forecastLoading,setForecastLoading]=useState(false);
@@ -358,6 +435,7 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
 ])
 
   setCustomers((c.data || []) as Customer[])
+  setAllCustomers((c.data || []) as Customer[])
   setEmployees((e.data || []) as Employee[])
   setProducts((p.data || []) as Product[])
   setOrders((o.data || []) as any)
@@ -365,6 +443,7 @@ let [c,e,p,o,po,b,bi] = await Promise.all([
   setPurchaseOrders((po.data || []) as any)
   setBuilds((b.data || []) as Build[])
   setBuildItems((bi.data||[]) as BuildItem[])
+  if(currentEmployee.role!=='Technician')await loadLeads();
   const {data:summary,error:summaryError}=await s.from('build_checklist_progress').select('id,build_id,task_key,completed,completed_at,completed_by');
   if(summaryError)console.error('Build checklist summary load failed:',summaryError);
   else setBuildSummary((summary||[]) as ChecklistProgress[]);
@@ -581,7 +660,7 @@ useEffect(()=>{
      : me.role==='Technician' ? ['Builds'] : ['Sales','Purchases','Builds','Inventory'];
    const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'};
    const allowedTabs:Record<string,string[]>={
-     Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],
+     Sales:['Dashboard','Customers','Leads','Quotations','Orders','Products','Order','Quote','Invoice'],
      Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],
      Builds:['Builds','Build'],Inventory:['Inventory Forecast','Product Analytics','Vendor Analytics','Products'],
      Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],
@@ -644,7 +723,7 @@ useEffect(()=>{
        me.role==='Technician'?['Builds']:['Sales','Purchases','Builds','Inventory'];
      const nextModule=requestedModule&&allowedModules.includes(requestedModule)?requestedModule:(me.role==='Technician'?'Builds':'Sales');
      const defaults:Record<string,string>={Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'};
-     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Inventory Forecast','Product Analytics','Vendor Analytics','Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
+     const allowedTabs:Record<string,string[]>={Sales:['Dashboard','Customers','Leads','Quotations','Orders','Products','Order','Quote','Invoice'],Purchases:['Purchasing','Purchase Orders','Products','Purchase Order','Order'],Builds:['Builds','Build'],Inventory:['Inventory Forecast','Product Analytics','Vendor Analytics','Products'],Accounting:['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports','Invoice'],Employees:['Employees']};
      const requestedTab=params.get('erpTab');
      const nextTab=requestedTab&&allowedTabs[nextModule]?.includes(requestedTab)?requestedTab:defaults[nextModule];
      const id=params.get('erpId')||'';
@@ -892,6 +971,120 @@ async function createQuotationCustomer(fd:FormData){
   }finally{
     setQuickCustomerSaving(false);
   }
+}
+async function loadLeads(){
+  const [l,n]=await Promise.all([
+    s.from('leads').select('*,customers(name,company,email,phone)').order('created_at',{ascending:false}),
+    s.from('lead_notes').select('*').order('created_at',{ascending:false})
+  ]);
+  const err=l.error||n.error;
+  if(err){console.error('Leads load failed:',err);setLeadsError(err.message);return;}
+  setLeadsError('');
+  setLeads((l.data||[]) as Lead[]);
+  setLeadNotes((n.data||[]) as LeadNote[]);
+}
+async function createLeadCustomer(fd:FormData){
+  if(quickCustomerSaving)return;
+  const name=String(fd.get('name')||'').trim();
+  if(!name){alert('Customer name is required.');return;}
+  setQuickCustomerSaving(true);
+  try{
+    const {data,error}=await s.from('customers').insert({
+      name,
+      company:String(fd.get('company')||'').trim()||null,
+      email:String(fd.get('email')||'').trim()||null,
+      phone:String(fd.get('phone')||'').trim()||null,
+      billing_address:String(fd.get('billing_address')||'').trim()||null,
+      shipping_address:String(fd.get('shipping_address')||'').trim()||null,
+      notes:String(fd.get('notes')||'').trim()||null
+    }).select('*').single();
+    if(error||!data){alert(`Customer not saved: ${error?.message||'Unknown error'}`);return;}
+    const newCustomer=data as Customer;
+    const add=(prev:Customer[])=>[...prev.filter(c=>c.id!==newCustomer.id),newCustomer].sort((a,b)=>a.name.localeCompare(b.name));
+    setAllCustomers(add);
+    setCustomers(add);
+    setLeadCustomerName(newCustomer.name);
+    setLeadCustomerId(newCustomer.id);
+    setLeadQuickCustomerOpen(false);
+  }finally{
+    setQuickCustomerSaving(false);
+  }
+}
+async function createLead(fd:FormData){
+  if(leadSaving)return;
+  const customer=String(fd.get('customer_id')||'');
+  if(!customer){alert('Please select a customer (or add a new one) before creating the lead.');return;}
+  const followUp=String(fd.get('follow_up_date')||'');
+  if(followUp&&(!/^\d{4}-\d{2}-\d{2}$/.test(followUp)||Number.isNaN(Date.parse(followUp+'T12:00:00')))){alert('Please enter a valid follow-up date.');return;}
+  setLeadSaving(true);
+  try{
+    const {data,error}=await s.from('leads').insert({
+      customer_id:customer,
+      interest:String(fd.get('interest')||'').trim()||null,
+      source:String(fd.get('source')||'').trim()||null,
+      stage:String(fd.get('stage')||'New'),
+      follow_up_date:followUp||null
+    }).select('id').single();
+    if(error||!data){alert(`Lead not saved: ${error?.message||'Unknown error'}`);return;}
+    const note=String(fd.get('note')||'').trim();
+    if(note){
+      const {error:noteError}=await s.from('lead_notes').insert({lead_id:data.id,note,author:me?.name||email});
+      if(noteError)alert(`Lead saved, but the note was not: ${noteError.message}`);
+    }
+    setModal('');
+    await loadLeads();
+  }finally{
+    setLeadSaving(false);
+  }
+}
+async function updateLead(id:string,patch:Record<string,any>){
+  const {error}=await s.from('leads').update({...patch,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){alert(`Lead not saved: ${error.message}`);return false;}
+  await loadLeads();
+  return true;
+}
+async function addLeadNote(id:string,note:string){
+  const {error}=await s.from('lead_notes').insert({lead_id:id,note,author:me?.name||email});
+  if(error){alert(`Note not saved: ${error.message}`);return false;}
+  await loadLeads();
+  return true;
+}
+async function deleteLead(lead:Lead){
+  if(!confirm(`Delete the lead for ${lead.customers?.name||'this customer'}? Its notes will be deleted too. The customer and any quotation are not affected.`))return;
+  const {error}=await s.from('leads').delete().eq('id',lead.id);
+  if(error){alert(`Lead not deleted: ${error.message}`);return;}
+  setModal('');
+  setSelectedLeadId('');
+  await loadLeads();
+}
+async function convertLead(lead:Lead){
+  const orderSelect='*,customers(*),order_items(*),payments(*),payment_adjustments(*),order_notes(*)';
+  if(lead.order_id){
+    const {data,error}=await s.from('orders').select(orderSelect).eq('id',lead.order_id).single();
+    if(error||!data){alert(error?.message||'That quotation could not be found. It may have been deleted.');return;}
+    setModal('');
+    setSelected(data as Order);
+    setTab('Order');
+    return;
+  }
+  if(!confirm(`Create a draft quotation for ${lead.customers?.name||'this customer'}?`))return;
+  const {data,error}=await s.from('orders').insert({
+    customer_id:lead.customer_id,
+    reference_number:lead.interest||null,
+    tax_rate:7.45,
+    order_date:todayStr(),
+    status:'Draft',
+    payment_status:'Not Invoiced'
+  }).select(orderSelect).single();
+  if(error||!data){alert(`Quotation not saved: ${error?.message||'Unknown error'}`);return;}
+  const created=data as Order;
+  const {error:leadError}=await s.from('leads').update({stage:'Quoted',order_id:created.id,updated_at:new Date().toISOString()}).eq('id',lead.id);
+  if(leadError)alert(`Quotation ${created.order_number} was created, but the lead was not updated: ${leadError.message}`);
+  else await s.from('lead_notes').insert({lead_id:lead.id,note:`Quotation ${created.order_number} created from this lead.`,author:me?.name||email});
+  setModal('');
+  await load();
+  setSelected(created);
+  setTab('Order');
 }
 async function createOrder(fd:FormData){
   const customer=String(fd.get('customer_id')||'');
@@ -1248,6 +1441,7 @@ const moduleNavItems:Record<string,string[]> = {
   Sales: [
     'Dashboard',
     'Customers',
+    'Leads',
     'Quotations',
     'Orders',
     'Products'
@@ -1357,6 +1551,24 @@ const analyticsMoney=(amount:number)=>amount.toLocaleString('en-US',{style:'curr
 const filteredForecastRows=forecastRows.filter(r=>(forecastVendor==='All'||r.vendor===forecastVendor)&&`${r.sku} ${r.name} ${r.vendor}`.toLowerCase().includes(forecastSearch.toLowerCase()));
 const safeForecastPage=Math.min(forecastPage,Math.max(1,Math.ceil(filteredForecastRows.length/LIST_PAGE_SIZE)));
 const navItems = moduleNavItems[module] || ['Dashboard'];
+const leadToday=todayStr();
+const isLeadActive=(l:Lead)=>LEAD_ACTIVE_STAGES.includes(l.stage);
+const isLeadDue=(l:Lead)=>isLeadActive(l)&&!!l.follow_up_date&&l.follow_up_date<=leadToday;
+const dueLeads=leads.filter(isLeadDue).sort((a,b)=>String(a.follow_up_date).localeCompare(String(b.follow_up_date)));
+const selectedLead=leads.find(l=>l.id===selectedLeadId)||null;
+const visibleLeads=leads.filter(l=>{
+  if(leadStageFilter==='Active'){if(!isLeadActive(l))return false;}
+  else if(leadStageFilter==='Due'){if(!isLeadDue(l))return false;}
+  else if(leadStageFilter!=='All'&&l.stage!==leadStageFilter)return false;
+  const q=leadSearch.trim().toLowerCase();
+  if(q&&![l.customers?.name,l.customers?.company,l.interest,l.source].join(' ').toLowerCase().includes(q))return false;
+  return true;
+}).sort((a,b)=>{
+  if(a.follow_up_date&&b.follow_up_date&&a.follow_up_date!==b.follow_up_date)return a.follow_up_date.localeCompare(b.follow_up_date);
+  if(a.follow_up_date&&!b.follow_up_date)return -1;
+  if(!a.follow_up_date&&b.follow_up_date)return 1;
+  return b.created_at.localeCompare(a.created_at);
+});
 return <div className="shell">
 <style>{FX_CSS}</style>
   <aside className={`side ${mobileMenuOpen?"mobile-open":""}`}>
@@ -1421,7 +1633,7 @@ return <div className="shell">
       {autoSaveStatus==='saving'?'◌ Saving...':autoSaveStatus==='saved'?'✓ Saved':'⚠ Not saved'}
       {autoSaveStatus==='error'&&<button type="button" onClick={retryAutoSaveStatus} title="Dismiss warning (does not retry saving)" style={{background:'none',border:0,cursor:'pointer',color:'inherit',fontSize:12}}>Dismiss</button>}
     </span>}<span className="muted">{email}</span><button className="btn secondary" onClick={logout}>Log out</button></div></div><div className="content">
-{tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{confirmedOrders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div><div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th className="fx-num">Sell</th><th className="fx-num">Margin</th></tr></thead><tbody>{confirmedOrders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} className="fx-row" onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td><span className="fx-link">{o.order_number}</span></td><td>{(o.customers as any)?.name}</td><td><StatusBadge status={o.status}/></td><td className="fx-num">{fmtMoney(t.sell)}</td><td className="fx-num">{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
+{tab==='Dashboard'&&<><div className="cards"><div className="card"><div className="muted">Customers</div><div className="value">{customers.length}</div></div><div className="card"><div className="muted">Open Orders</div><div className="value">{confirmedOrders.filter(o=>o.status!=='Completed').length}</div></div><div className="card"><div className="muted">Parts Awaiting</div><div className="value">{need.length}</div></div><div className="card"><div className="muted">Products</div><div className="value">{products.length}</div></div></div>{me?.role!=='Technician'&&!leadsError&&<div className="panel"><h2>Follow-ups Due</h2>{dueLeads.length===0?<p className="muted">No lead follow-ups are due.</p>:<table><thead><tr><th>Customer</th><th>Interested in</th><th>Stage</th><th>Follow-up</th><th></th></tr></thead><tbody>{dueLeads.map(l=><tr key={l.id} className="fx-row" onClick={()=>{setSelectedLeadId(l.id);setModal('viewLead')}}><td><b>{l.customers?.name||'—'}</b></td><td>{l.interest||'—'}</td><td><LeadBadge stage={l.stage}/></td><td style={{color:l.follow_up_date&&l.follow_up_date<leadToday?'#b91c1c':undefined,fontWeight:600}}>{fmtLeadDate(l.follow_up_date)}</td><td><span className="muted">View →</span></td></tr>)}</tbody></table>}</div>}<div className="panel"><h2>Recent Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th className="fx-num">Sell</th><th className="fx-num">Margin</th></tr></thead><tbody>{confirmedOrders.slice(0,10).map(o=>{let t=totals(o);return <tr key={o.id} className="fx-row" onClick={()=>{setSelected(o);setTab('Order')}} style={{cursor:'pointer'}}><td><span className="fx-link">{o.order_number}</span></td><td>{(o.customers as any)?.name}</td><td><StatusBadge status={o.status}/></td><td className="fx-num">{fmtMoney(t.sell)}</td><td className="fx-num">{t.gm.toFixed(1)}%</td></tr>})}</tbody></table></div></>}
 {module==='Accounting'&&(['Sales Accounting Overview','Payments','Outstanding Balances','Expenses','Vendor Bills','Financial Reports'].includes(tab))&&<AccountingWorkspace tab={tab as any} openOrder={async(id)=>{const {data,error}=await s.from('orders').select('*,customers(*),order_items(*),payments(*),payment_adjustments(*),order_notes(*)').eq('id',id).single();if(error||!data){alert(error?.message||'Order not found');return;}setSelected(data as Order);setTab('Invoice');}}/>}
 {tab==='Employees'&&<section className="card">
   <div className="row" style={{justifyContent:'space-between'}}>
@@ -1832,6 +2044,42 @@ onChange={e=>{
 </div>
   </section>
 })()}
+{tab==='Leads'&&<>
+  <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
+    <button className="btn" onClick={()=>{setLeadCustomerName('');setLeadCustomerId('');setLeadQuickCustomerOpen(false);setModal('lead')}}>+ New Lead</button>
+    <div className="row">
+      <input placeholder="Search leads..." value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} style={{padding:9,width:260}}/>
+      <select value={leadStageFilter} onChange={e=>setLeadStageFilter(e.target.value)}>
+        <option value="Active">Active leads</option>
+        <option value="Due">Follow-up due</option>
+        <option value="All">All leads</option>
+        {LEAD_STAGES.map(x=><option key={x} value={x}>{x}</option>)}
+      </select>
+    </div>
+  </div>
+  {leadsError
+    ?<div className="panel"><h2>Leads</h2><p>The Leads tables have not been set up in Supabase yet. Run the leads.sql script in the Supabase SQL Editor, then refresh this page.</p><p className="muted">{leadsError}</p></div>
+    :<div className="panel">
+      <h2>Leads</h2>
+      <table>
+        <thead><tr><th>Customer</th><th>Interested in</th><th>Stage</th><th>Follow-up</th><th>Latest note</th><th></th></tr></thead>
+        <tbody>
+          {visibleLeads.length===0&&<tr><td colSpan={6} className="muted">{leads.length===0?'No leads yet. Click + New Lead to add one.':'No leads match this filter.'}</td></tr>}
+          {visibleLeads.map(l=>{
+            const latest=leadNotes.find(n=>n.lead_id===l.id);
+            return <tr key={l.id} className="fx-row" tabIndex={0} aria-label={`View lead ${l.customers?.name||''}`} onClick={()=>{setSelectedLeadId(l.id);setModal('viewLead')}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedLeadId(l.id);setModal('viewLead')}}}>
+              <td><b>{l.customers?.name||'—'}</b>{l.customers?.company?<div className="muted">{l.customers.company}</div>:null}</td>
+              <td>{l.interest||'—'}</td>
+              <td><LeadBadge stage={l.stage}/></td>
+              <td style={{color:isLeadActive(l)&&l.follow_up_date&&l.follow_up_date<leadToday?'#b91c1c':undefined,fontWeight:isLeadDue(l)?600:undefined}}>{fmtLeadDate(l.follow_up_date)}</td>
+              <td className="muted">{latest?(latest.note.length>60?latest.note.slice(0,60)+'…':latest.note):''}</td>
+              <td><span className="muted">View →</span></td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>}
+</>}
 {tab==='Customers'&&<>
   <div
     className="row"
@@ -2563,6 +2811,67 @@ onChange={e=>{
     </div>
   </form>}
 </>}
+{modal==='lead'&&<>
+  <form action={createLead} style={{display:leadQuickCustomerOpen?'none':undefined}}>
+    <h2>New Lead</h2>
+    <div className="grid">
+      <div className="field" style={{gridColumn:'span 2'}}>
+        <label>Customer</label>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <input
+            list="lead-customers"
+            placeholder="Type to search"
+            value={leadCustomerName}
+            onChange={e=>{
+              const value=e.target.value;
+              const match=allCustomers.find(c=>c.name===value);
+              setLeadCustomerName(value);
+              setLeadCustomerId(match?.id||'');
+            }}
+            style={{minWidth:0,flex:1}}
+          />
+          <button type="button" className="btn secondary" onClick={()=>setLeadQuickCustomerOpen(true)} style={{whiteSpace:'nowrap',padding:'9px 10px'}}>+ New Customer</button>
+        </div>
+        <datalist id="lead-customers">
+          {allCustomers.map(c=><option key={c.id} value={c.name}>{c.company||c.email||''}</option>)}
+        </datalist>
+        <input name="customer_id" type="hidden" value={leadCustomerId} readOnly/>
+      </div>
+      <div className="field"><label>Stage</label><select name="stage" defaultValue="New"><option>New</option><option>Contacted</option><option>Not ready</option></select></div>
+      <div className="field"><label>Interested in</label><input name="interest" placeholder="e.g. Sim rig"/></div>
+      <div className="field"><label>Source</label><input name="source" list="lead-sources" placeholder="e.g. Referral"/><datalist id="lead-sources">{LEAD_SOURCES.map(x=><option key={x} value={x}/>)}</datalist></div>
+      <div className="field"><label>Follow-up date</label><input name="follow_up_date" type="date"/></div>
+    </div>
+    <div className="field"><label>First note</label><textarea name="note" rows={3} placeholder="What did you talk about? When might they be ready?"/></div>
+    <button className="btn" disabled={leadSaving}>{leadSaving?'Saving...':'Create Lead'}</button>
+  </form>
+  {leadQuickCustomerOpen&&<form action={createLeadCustomer}>
+    <h2>Add New Customer</h2>
+    <div className="grid">
+      <div className="field"><label>Name *</label><input name="name" required autoFocus/></div>
+      <div className="field"><label>Company</label><input name="company"/></div>
+      <div className="field"><label>Email</label><input name="email" type="email"/></div>
+      <div className="field"><label>Phone</label><input name="phone"/></div>
+      <div className="field"><label>Billing Address</label><textarea name="billing_address" rows={2}/></div>
+      <div className="field"><label>Shipping Address</label><textarea name="shipping_address" rows={2}/></div>
+    </div>
+    <div className="field"><label>Notes</label><textarea name="notes" rows={3}/></div>
+    <div className="row" style={{justifyContent:'flex-end',marginTop:12}}>
+      <button type="button" className="btn secondary" disabled={quickCustomerSaving} onClick={()=>setLeadQuickCustomerOpen(false)}>Cancel</button>
+      <button className="btn" disabled={quickCustomerSaving}>{quickCustomerSaving?'Saving...':'Save Customer'}</button>
+    </div>
+  </form>}
+</>}
+{modal==='viewLead'&&selectedLead&&<LeadDetail
+  key={selectedLead.id}
+  lead={selectedLead}
+  notes={leadNotes.filter(n=>n.lead_id===selectedLead.id)}
+  onSave={patch=>updateLead(selectedLead.id,patch)}
+  onAddNote={text=>addLeadNote(selectedLead.id,text)}
+  onConvert={()=>convertLead(selectedLead)}
+  onDelete={()=>deleteLead(selectedLead)}
+  onClose={()=>setModal('')}
+/>}
 {modal==='other'&&<form action={addOther}><h2>Add Labor / Other</h2><div className="grid"><div className="field"><label>Type</label><select name="item_type"><option>Labor/Service</option><option>Shipping</option><option>Miscellaneous</option><option>Discount</option></select></div><div className="field"><label>Description</label><input name="description" required/></div><div className="field"><label>Qty</label><input name="qty" type="number" defaultValue="1"/></div><div className="field"><label>Sell Price</label><input name="sell_price" type="number" step=".01" required/></div><div className="field"><label>Internal Cost</label><input name="cost" type="number" step=".01" placeholder="Optional"/></div></div><button className="btn">Add Item</button></form>}{modal==='adjustment'&&selected&&adjustmentPayment&&<PaymentAdjustmentForm payment={adjustmentPayment} adjustments={(selected.payment_adjustments||[]).filter(a=>a.payment_id===adjustmentPayment.id)} submit={recordAdjustment}/>}
 {modal==='payment'&&selected&&<form action={addPayment}><h2>Record Payment</h2><p className="muted">Remaining balance: ${Math.max(0,Math.round(((selected.order_items||[]).reduce((sum,i)=>sum+Number(i.qty)*Number(i.sell_price),0)*(1+(selected.tax_exempt?0:Number(selected.tax_rate||0)/100))+Number(selected.shipping_amount||0)-(selected.payments||[]).reduce((sum,p)=>sum+Number(p.amount),0)+(selected.payment_adjustments||[]).reduce((sum,a)=>sum+Number(a.amount),0))*100)/100).toFixed(2)}</p><div className="grid"><div className="field"><label>Amount</label><input name="amount" type="number" step=".01" min="0.01" defaultValue={Math.max(0,Math.round(((selected.order_items||[]).reduce((sum,i)=>sum+Number(i.qty)*Number(i.sell_price),0)*(1+(selected.tax_exempt?0:Number(selected.tax_rate||0)/100))+Number(selected.shipping_amount||0)-(selected.payments||[]).reduce((sum,p)=>sum+Number(p.amount),0)+(selected.payment_adjustments||[]).reduce((sum,a)=>sum+Number(a.amount),0))*100)/100)>0?Math.max(0,Math.round(((selected.order_items||[]).reduce((sum,i)=>sum+Number(i.qty)*Number(i.sell_price),0)*(1+(selected.tax_exempt?0:Number(selected.tax_rate||0)/100))+Number(selected.shipping_amount||0)-(selected.payments||[]).reduce((sum,p)=>sum+Number(p.amount),0)+(selected.payment_adjustments||[]).reduce((sum,a)=>sum+Number(a.amount),0))*100)/100).toFixed(2):''} required/></div><div className="field"><label>Payment Date</label><input name="paid_at" type="date" defaultValue={new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10)} required/></div><div className="field"><label>Payment Method</label><select name="payment_method"><option>Credit Card</option><option>ACH</option><option>Wire</option><option>Check</option><option>Cash</option><option>Other</option></select></div><div className="field"><label>Reference / Confirmation</label><input name="reference"/></div></div><div className="field"><label>Notes</label><input name="notes"/></div><button className="btn">Record Payment</button></form>}</div></div>}</div>}
   
