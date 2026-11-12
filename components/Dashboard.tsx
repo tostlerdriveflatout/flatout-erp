@@ -139,10 +139,11 @@ function TechnicianChecklist({build,order,assigned,progress,onToggle,saving}:{bu
  </div>
 }
 type LeadCustomer={name:string,company:string|null,email:string|null,phone:string|null};
-type Lead={id:string,customer_id:string,interest:string|null,source:string|null,stage:string,follow_up_date:string|null,order_id:string|null,created_at:string,updated_at:string,customers?:LeadCustomer|null};
+type Lead={id:string,customer_id:string,lead_type:string,interest:string|null,source:string|null,stage:string,follow_up_date:string|null,order_id:string|null,created_at:string,updated_at:string,customers?:LeadCustomer|null};
 type LeadNote={id:string,lead_id:string,note:string,author:string|null,created_at:string};
 const LEAD_STAGES=['New','Contacted','Not ready','Quoted','Won','Lost'];
 const LEAD_ACTIVE_STAGES=['New','Contacted','Not ready','Quoted'];
+const LEAD_TYPES=['Rig build','Franchise','Other'];
 const LEAD_SOURCES=['Referral','Website','Social media','Phone call','Event','Repeat customer','Other'];
 function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function fmtLeadDate(d:string|null|undefined){if(!d)return '—';const [y,m,day]=d.split('-');return `${m}/${day}/${y}`}
@@ -152,6 +153,7 @@ function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{le
   const [interest,setInterest]=useState(lead.interest||'');
   const [source,setSource]=useState(lead.source||'');
   const [stage,setStage]=useState(lead.stage);
+  const [leadType,setLeadType]=useState(lead.lead_type||'Rig build');
   const [follow,setFollow]=useState(lead.follow_up_date||'');
   const [noteDraft,setNoteDraft]=useState('');
   const [busy,setBusy]=useState(false);
@@ -160,7 +162,7 @@ function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{le
   // Fields save automatically. If a save fails, the field goes back to the last saved value.
   async function commit(patch:Record<string,any>){
     const ok=await onSave(patch);
-    if(!ok){setInterest(lead.interest||'');setSource(lead.source||'');setStage(lead.stage);setFollow(lead.follow_up_date||'');}
+    if(!ok){setInterest(lead.interest||'');setSource(lead.source||'');setStage(lead.stage);setLeadType(lead.lead_type||'Rig build');setFollow(lead.follow_up_date||'');}
   }
   function saveText(field:'interest'|'source',value:string){
     const next=value.trim()||null;
@@ -189,6 +191,7 @@ function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{le
     <div className="grid" style={{marginTop:12}}>
       <div className="field"><label>Interested in</label><input value={interest} onChange={e=>setInterest(e.target.value)} onBlur={e=>saveText('interest',e.target.value)} placeholder="e.g. Sim rig"/></div>
       <div className="field"><label>Source</label><input list="lead-detail-sources" value={source} onChange={e=>setSource(e.target.value)} onBlur={e=>saveText('source',e.target.value)}/><datalist id="lead-detail-sources">{LEAD_SOURCES.map(x=><option key={x} value={x}/>)}</datalist></div>
+      <div className="field"><label>Type</label><select value={leadType} onChange={e=>{setLeadType(e.target.value);void commit({lead_type:e.target.value});}}>{LEAD_TYPES.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
       <div className="field"><label>Stage</label><select value={stage} onChange={e=>{setStage(e.target.value);void commit({stage:e.target.value});}}>{LEAD_STAGES.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
       <div className="field"><label>Follow-up date</label><input type="date" value={follow} onChange={e=>{setFollow(e.target.value);saveFollow(e.target.value);}} onBlur={e=>saveFollow(e.target.value)}/></div>
     </div>
@@ -324,6 +327,8 @@ const [leadQuickCustomerOpen,setLeadQuickCustomerOpen]=useState(false);
 const [leadSaving,setLeadSaving]=useState(false);
 const [leadSearch,setLeadSearch]=useState('');
 const [leadStageFilter,setLeadStageFilter]=useState('Active');
+const [leadTypeFilter,setLeadTypeFilter]=useState('All');
+const [leadSyncing,setLeadSyncing]=useState(false);
 const [leadPage,setLeadPage]=useState(1);
 // Independent history dataset: order-list pagination must not affect the forecast.
 const [forecastOrders,setForecastOrders]=useState<Order[]>([]);
@@ -1033,6 +1038,25 @@ async function createLeadCustomer(fd:FormData){
     setQuickCustomerSaving(false);
   }
 }
+async function syncLeads(){
+  if(leadSyncing)return;
+  if(!confirm('Check the Rig Build and Franchise sheets for new inquiries and add them as leads?'))return;
+  const {data:{session}}=await s.auth.getSession();
+  if(!session?.access_token){alert('Your login session has expired. Please log in again.');return;}
+  setLeadSyncing(true);
+  try{
+    const response=await fetch('/api/sync-leads',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`}});
+    const result=await response.json();
+    if(!response.ok){alert(result.error||result.details||'Lead sync failed.');return;}
+    await load();
+    const lines=(result.results||[]).map((r:any)=>`${r.source}: ${r.imported} new, ${r.already_imported} already imported`);
+    alert(`Lead sync complete.\n\nNew leads: ${result.imported}\n${lines.join('\n')}`+(result.errors?.length?`\n\nProblems:\n${result.errors.join('\n')}`:''));
+  }catch(err:any){
+    alert(`Lead sync failed: ${err?.message||err}`);
+  }finally{
+    setLeadSyncing(false);
+  }
+}
 async function createLead(fd:FormData){
   if(leadSaving)return;
   const customer=String(fd.get('customer_id')||'');
@@ -1043,6 +1067,7 @@ async function createLead(fd:FormData){
   try{
     const {data,error}=await s.from('leads').insert({
       customer_id:customer,
+      lead_type:String(fd.get('lead_type')||'Rig build'),
       interest:String(fd.get('interest')||'').trim()||null,
       source:String(fd.get('source')||'').trim()||null,
       stage:String(fd.get('stage')||'New'),
@@ -1589,6 +1614,7 @@ const visibleLeads=leads.filter(l=>{
   if(leadStageFilter==='Active'){if(!isLeadActive(l))return false;}
   else if(leadStageFilter==='Due'){if(!isLeadDue(l))return false;}
   else if(leadStageFilter!=='All'&&l.stage!==leadStageFilter)return false;
+  if(leadTypeFilter!=='All'&&l.lead_type!==leadTypeFilter)return false;
   const q=leadSearch.trim().toLowerCase();
   if(q&&![l.customers?.name,l.customers?.company,l.interest,l.source].join(' ').toLowerCase().includes(q))return false;
   return true;
@@ -2077,9 +2103,13 @@ onChange={e=>{
 })()}
 {tab==='Leads'&&<>
   <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
-    <button className="btn" onClick={()=>{setLeadCustomerName('');setLeadCustomerId('');setLeadQuickCustomerOpen(false);setModal('lead')}}>+ New Lead</button>
+    <div className="row"><button className="btn" onClick={()=>{setLeadCustomerName('');setLeadCustomerId('');setLeadQuickCustomerOpen(false);setModal('lead')}}>+ New Lead</button><button type="button" className="btn secondary" disabled={leadSyncing} onClick={syncLeads}>{leadSyncing?'Syncing...':'Sync Leads'}</button></div>
     <div className="row">
       <input placeholder="Search leads..." value={leadSearch} onChange={e=>{setLeadSearch(e.target.value);setLeadPage(1);}} style={{padding:9,width:260}}/>
+      <select value={leadTypeFilter} onChange={e=>{setLeadTypeFilter(e.target.value);setLeadPage(1);}}>
+        <option value="All">All types</option>
+        {LEAD_TYPES.map(x=><option key={x} value={x}>{x}</option>)}
+      </select>
       <select value={leadStageFilter} onChange={e=>{setLeadStageFilter(e.target.value);setLeadPage(1);}}>
         <option value="Active">Active leads</option>
         <option value="Due">Follow-up due</option>
@@ -2093,13 +2123,14 @@ onChange={e=>{
     :<div className="panel">
       <h2>Leads</h2>
       <table>
-        <thead><tr><th>Customer</th><th>Interested in</th><th>Stage</th><th>Follow-up</th><th>Latest note</th><th></th></tr></thead>
+        <thead><tr><th>Customer</th><th>Type</th><th>Interested in</th><th>Stage</th><th>Follow-up</th><th>Latest note</th><th></th></tr></thead>
         <tbody>
-          {visibleLeads.length===0&&<tr><td colSpan={6} className="muted">{leads.length===0?'No leads yet. Click + New Lead to add one.':'No leads match this filter.'}</td></tr>}
+          {visibleLeads.length===0&&<tr><td colSpan={7} className="muted">{leads.length===0?'No leads yet. Click + New Lead to add one.':'No leads match this filter.'}</td></tr>}
           {pagedLeads.map(l=>{
             const latest=leadNotes.find(n=>n.lead_id===l.id);
             return <tr key={l.id} className="fx-row" tabIndex={0} aria-label={`View lead ${l.customers?.name||''}`} onClick={()=>{setSelectedLeadId(l.id);setModal('viewLead')}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedLeadId(l.id);setModal('viewLead')}}}>
               <td><b>{l.customers?.name||'—'}</b>{l.customers?.company?<div className="muted">{l.customers.company}</div>:null}</td>
+              <td><span className="fx-badge fx-neutral">{l.lead_type}</span></td>
               <td>{l.interest||'—'}</td>
               <td><LeadBadge stage={l.stage}/></td>
               <td style={{color:isLeadActive(l)&&l.follow_up_date&&l.follow_up_date<leadToday?'#b91c1c':undefined,fontWeight:isLeadDue(l)?600:undefined}}>{fmtLeadDate(l.follow_up_date)}</td>
@@ -2869,6 +2900,7 @@ onChange={e=>{
         </datalist>
         <input name="customer_id" type="hidden" value={leadCustomerId} readOnly/>
       </div>
+      <div className="field"><label>Type</label><select name="lead_type" defaultValue="Rig build">{LEAD_TYPES.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
       <div className="field"><label>Stage</label><select name="stage" defaultValue="New"><option>New</option><option>Contacted</option><option>Not ready</option></select></div>
       <div className="field"><label>Interested in</label><input name="interest" placeholder="e.g. Sim rig"/></div>
       <div className="field"><label>Source</label><input name="source" list="lead-sources" placeholder="e.g. Referral"/><datalist id="lead-sources">{LEAD_SOURCES.map(x=><option key={x} value={x}/>)}</datalist></div>
