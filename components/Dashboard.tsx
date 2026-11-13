@@ -31,7 +31,7 @@ account_activated_at:string|null,
   created_at:string,
   updated_at:string
 };  
-type Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};
+type Product={id:string,sku:string|null,name:string,vendor:string|null,category:string|null,sell_price:number,cost:number|null,active:boolean,last_synced_at?:string|null,source_key?:string|null};type Payment={id:string,order_id:string,amount:number,payment_method:string|null,reference:string|null,notes:string|null,paid_at:string};
 type PaymentAdjustment={id:string,payment_id:string,order_id:string,adjustment_type:'Refund'|'Void',amount:number,reason:string,square_reference:string|null,created_at:string};
 type Order={
   id:string,
@@ -149,6 +149,131 @@ function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.get
 function fmtLeadDate(d:string|null|undefined){if(!d)return '—';const [y,m,day]=d.split('-');return `${m}/${day}/${y}`}
 function leadTone(stage:string){return stage==='Won'?'ok':stage==='Not ready'?'warn':stage==='Lost'?'bad':stage==='Quoted'?'neutral':'info'}
 function LeadBadge({stage}:{stage:string}){return <span className={`fx-badge fx-${leadTone(stage)}`}>{stage}</span>}
+
+// ---- Price Guide sync history and product page ----
+type SyncRun={id:string,run_by:string|null,new_count:number,changed_count:number,missing_count:number,skipped_count:number,flagged_count:number,created_at:string};
+type SyncChange={id:string,run_id:string,product_id:string|null,sku:string|null,name:string|null,vendor:string|null,change_type:'new'|'changed'|'missing',field:'sell_price'|'cost'|null,old_value:number|null,new_value:number|null,pct_change:number|null,sell_price:number|null,cost:number|null,last_seen:string|null,flagged:boolean,reviewed:boolean,reviewed_by:string|null,reviewed_at:string|null,created_at:string};
+const SYNC_FIELD_LABEL:Record<string,string>={sell_price:'Retail',cost:'Cost'};
+const fmtMoneyOrDash=(n:number|null|undefined)=>n==null?'—':fmtMoney(Number(n));
+const fmtQty=(n:number)=>Number.isInteger(n)?String(n):n.toFixed(2).replace(/\.?0+$/,'');
+function fmtPct(n:number|null|undefined){if(n==null)return '—';const v=Number(n);return `${v>0?'+':''}${v.toFixed(1)}%`}
+function fmtWhen(iso:string|null|undefined){if(!iso)return '—';const d=new Date(iso);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
+function fmtDay(iso:string|null|undefined){if(!iso)return '—';const d=new Date(iso.length===10?iso+'T12:00:00':iso);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+function SyncResultsPanel({runs,selectedRunId,onSelectRun,changes,onReview,tab,onTab,showAll,onShowAll,note}:{runs:SyncRun[],selectedRunId:string,onSelectRun:(id:string)=>void,changes:SyncChange[],onReview:(c:SyncChange,reviewed:boolean)=>void,tab:'changed'|'new'|'missing',onTab:(t:'changed'|'new'|'missing')=>void,showAll:boolean,onShowAll:(v:boolean)=>void,note:string}){
+  if(note)return <div className="panel" style={{padding:14,marginTop:0,marginBottom:14}}><span className="muted">{note}</span></div>;
+  if(runs.length===0)return <div className="panel" style={{padding:14,marginTop:0,marginBottom:14}}><b>Sync results</b> <span className="muted">Nothing recorded yet. What changed will appear here after the next Price Guide sync.</span></div>;
+  const run=runs.find(r=>r.id===selectedRunId)||runs[0];
+  const isLatest=run.id===runs[0].id;
+  const attention=(c:SyncChange)=>Number(c.flagged&&!c.reviewed);
+  const changed=changes.filter(c=>c.change_type==='changed').sort((a,b)=>attention(b)-attention(a)||Math.abs(Number(b.pct_change||0))-Math.abs(Number(a.pct_change||0)));
+  const added=changes.filter(c=>c.change_type==='new');
+  const missing=changes.filter(c=>c.change_type==='missing');
+  const pending=changes.filter(c=>c.flagged&&!c.reviewed);
+  const rows=tab==='new'?added:tab==='missing'?missing:changed;
+  const LIMIT=10;
+  const shown=showAll?rows:rows.slice(0,LIMIT);
+  const tabBtn=(key:'changed'|'new'|'missing',label:string,n:number)=><button type="button" className={`btn secondary${tab===key?' fx-selected':''}`} onClick={()=>{onTab(key);onShowAll(false)}}>{label} ({n})</button>;
+  return <div className="panel" style={{padding:16,marginTop:0,marginBottom:14,overflow:'visible'}}>
+    <div className="row" style={{justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:12}}>
+      <div><b>{isLatest?'Last Price Guide sync':'Earlier Price Guide sync'}</b><div className="muted" style={{fontSize:13}}>{fmtWhen(run.created_at)} · run by {run.run_by||'—'}</div></div>
+      {runs.length>1&&<label className="row" style={{gap:8,fontSize:13}}><span className="muted">Previous syncs</span><select value={run.id} onChange={e=>{onSelectRun(e.target.value);onShowAll(false)}} style={{padding:8}}>{runs.map((r,i)=><option key={r.id} value={r.id}>{i===0?'Latest · ':''}{fmtWhen(r.created_at)}</option>)}</select></label>}
+    </div>
+    <div className="cards">
+      <div className="card"><div className="muted">New products</div><div className="value">{run.new_count}</div></div>
+      <div className="card"><div className="muted">Products changed</div><div className="value">{run.changed_count}</div></div>
+      <div className="card"><div className="muted">No longer in sheet</div><div className="value">{run.missing_count}</div></div>
+      <div className="card"><div className="muted">Needs review</div><div className="value" style={{color:pending.length>0?'#b45309':undefined}}>{pending.length}</div></div>
+    </div>
+    {pending.length>0&&<div style={{background:'#fef3c7',color:'#78350f',borderRadius:8,padding:'10px 12px',marginTop:12,fontSize:13}}>
+      <b>Needs review.</b> These are large changes or a removed price. Check the Price Guide for a typo, then tick Reviewed.
+      {pending.slice(0,5).map(c=><div key={c.id} className="row" style={{justifyContent:'space-between',gap:12,flexWrap:'wrap',marginTop:8}}>
+        <span>{c.name||'Product'} · {c.sku||'no SKU'}: {SYNC_FIELD_LABEL[c.field||'']||c.field} {fmtMoneyOrDash(c.old_value)} → {fmtMoneyOrDash(c.new_value)} ({fmtPct(c.pct_change)})</span>
+        <label style={{whiteSpace:'nowrap',fontWeight:700}}><input type="checkbox" checked={c.reviewed} onChange={e=>onReview(c,e.target.checked)}/> Reviewed</label>
+      </div>)}
+      {pending.length>5&&<div style={{marginTop:8}}>+ {pending.length-5} more in the table below.</div>}
+    </div>}
+    <div className="row" style={{gap:8,flexWrap:'wrap',margin:'14px 0 10px'}}>
+      {tabBtn('changed','Price changes',changed.length)}
+      {tabBtn('new','New',added.length)}
+      {tabBtn('missing','No longer in sheet',missing.length)}
+    </div>
+    <div style={{overflowX:'auto'}}>
+      {tab==='changed'&&<table><thead><tr><th>Product</th><th>Field</th><th className="fx-num">Before</th><th className="fx-num">After</th><th className="fx-num">Change</th><th>Status</th></tr></thead><tbody>
+        {shown.map(c=><tr key={c.id}><td><b>{c.name||'—'}</b> <span className="muted">{c.sku}</span></td><td>{SYNC_FIELD_LABEL[c.field||'']||c.field}</td><td className="fx-num">{fmtMoneyOrDash(c.old_value)}</td><td className="fx-num">{fmtMoneyOrDash(c.new_value)}</td><td className="fx-num">{fmtPct(c.pct_change)}</td>
+          <td>{c.flagged?(c.reviewed?<><span className="fx-badge fx-ok">Reviewed</span> <button type="button" className="fx-link" style={{background:'none',border:0,cursor:'pointer',padding:0}} onClick={()=>onReview(c,false)}>Undo</button></>:<span className="fx-badge fx-warn">Needs review</span>):<span className="muted">—</span>}</td></tr>)}
+        {rows.length===0&&<tr><td colSpan={6} className="muted" style={{textAlign:'center',padding:16}}>No price changes in this sync.</td></tr>}
+      </tbody></table>}
+      {tab==='new'&&<table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th className="fx-num">Sell</th><th className="fx-num">Cost</th></tr></thead><tbody>
+        {shown.map(c=><tr key={c.id}><td>{c.sku}</td><td><b>{c.name||'—'}</b></td><td>{c.vendor}</td><td className="fx-num">{fmtMoneyOrDash(c.sell_price)}</td><td className="fx-num">{fmtMoneyOrDash(c.cost)}</td></tr>)}
+        {rows.length===0&&<tr><td colSpan={5} className="muted" style={{textAlign:'center',padding:16}}>No new products in this sync.</td></tr>}
+      </tbody></table>}
+      {tab==='missing'&&<table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th className="fx-num">Sell</th><th>Last in sheet</th></tr></thead><tbody>
+        {shown.map(c=><tr key={c.id}><td>{c.sku}</td><td><b>{c.name||'—'}</b></td><td>{c.vendor}</td><td className="fx-num">{fmtMoneyOrDash(c.sell_price)}</td><td>{fmtDay(c.last_seen)}</td></tr>)}
+        {rows.length===0&&<tr><td colSpan={5} className="muted" style={{textAlign:'center',padding:16}}>Every catalog product is still in the sheet.</td></tr>}
+      </tbody></table>}
+    </div>
+    {rows.length>LIMIT&&<div style={{marginTop:10}}><button type="button" className="btn ghost" onClick={()=>onShowAll(!showAll)}>{showAll?'Show fewer':`Show all ${rows.length}`}</button></div>}
+    <p className="muted" style={{fontSize:12,margin:'12px 0 0'}}>Saved with each sync and kept until the next sync replaces it as the latest. Products no longer in the sheet stay in the catalog and are marked "Not in sheet"; nothing is deleted.</p>
+  </div>
+}
+type ProductSales={d30:number,d90:number,d365:number,last:string,months:Record<string,number>};
+function ProductDetail({product,sales,salesLoading,recent,history,loading,notInSheet,onBack}:{product:Product,sales:ProductSales,salesLoading:boolean,recent:Array<{id:string,number:string,date:string,customer:string,qty:number,price:number}>,history:SyncChange[],loading:boolean,notInSheet:boolean,onBack:()=>void}){
+  const sell=Number(product.sell_price),cost=product.cost==null?null:Number(product.cost);
+  const margin=cost!=null&&sell>0?(sell-cost)/sell*100:null;
+  const status=product.active===false?['Retired','neutral']:notInSheet?['Not in sheet','warn']:['Active','ok'];
+  const months:string[]=[];const now=new Date();
+  for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)}
+  const maxV=Math.max(1,...months.map(m=>Number(sales.months[m]||0)));
+  const sold=(n:number)=>salesLoading?'…':fmtQty(n);
+  return <>
+    <button type="button" className="btn ghost" onClick={onBack} style={{marginBottom:12}}>← Back to Products</button>
+    <div className="panel" style={{padding:16,marginTop:0}}>
+      <div className="row" style={{justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
+        <div><h2 style={{margin:0,padding:0,border:0,fontSize:20}}>{product.name}</h2><div className="muted">{product.sku||'No SKU'} · {product.vendor||'No vendor'} · {product.category||'No category'}</div></div>
+        <span className={`fx-badge fx-${status[1]}`}>{status[0]}</span>
+      </div>
+      <div className="cards" style={{marginTop:14}}>
+        <div className="card"><div className="muted">Sell</div><div className="value">{fmtMoney(sell)}</div></div>
+        <div className="card"><div className="muted">Cost</div><div className="value">{cost==null?'—':fmtMoney(cost)}</div></div>
+        <div className="card"><div className="muted">Margin</div><div className="value">{margin==null?'—':`${margin.toFixed(1)}%`}</div></div>
+        <div className="card"><div className="muted">Last sale</div><div className="value" style={{fontSize:22}}>{salesLoading?'…':sales.last?fmtDay(sales.last):'—'}</div></div>
+      </div>
+      <p className="muted" style={{fontSize:12,margin:'10px 0 0'}}>Prices come from the Price Guide and can't be edited here.{product.last_synced_at?` Last synced ${fmtWhen(product.last_synced_at)}.`:''}{notInSheet?' This product was not in the sheet at the last sync.':''}</p>
+    </div>
+    <div className="panel" style={{padding:16}}>
+      <b>Units sold</b>
+      <div className="cards" style={{marginTop:10}}>
+        <div className="card"><div className="muted">Last 30 days</div><div className="value">{sold(sales.d30)}</div></div>
+        <div className="card"><div className="muted">Last 90 days</div><div className="value">{sold(sales.d90)}</div></div>
+        <div className="card"><div className="muted">Last 365 days</div><div className="value">{sold(sales.d365)}</div></div>
+      </div>
+      <div className="muted" style={{fontSize:12,margin:'14px 0 6px'}}>Units sold by month, last 12 months</div>
+      <div style={{display:'flex',alignItems:'flex-end',gap:6,height:130}}>
+        {months.map(m=>{const v=Number(sales.months[m]||0);const label=new Date(Number(m.slice(0,4)),Number(m.slice(5))-1,1).toLocaleString('en-US',{month:'short'});
+          return <div key={m} title={`${label} ${m.slice(0,4)}: ${fmtQty(v)} sold`} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}}>
+            <span className="muted" style={{fontSize:11}}>{v>0?fmtQty(v):''}</span>
+            <div style={{width:'100%',maxWidth:34,height:`${(v/maxV)*80}px`,minHeight:v>0?3:0,background:'#E71D36',borderRadius:3}}/>
+            <span className="muted" style={{fontSize:11,marginTop:4}}>{label}</span>
+          </div>})}
+      </div>
+      <p className="muted" style={{fontSize:12,margin:'10px 0 0'}}>Based on confirmed Sales Orders (not quotations or canceled orders), by order date.</p>
+    </div>
+    <div className="panel" style={{padding:16}}>
+      <b>Price history</b>
+      <div style={{overflowX:'auto',marginTop:8}}><table><thead><tr><th>Date</th><th>Field</th><th className="fx-num">Before</th><th className="fx-num">After</th><th className="fx-num">Change</th></tr></thead><tbody>
+        {history.map(h=><tr key={h.id}><td>{fmtDay(h.created_at)}</td><td>{SYNC_FIELD_LABEL[h.field||'']||h.field}</td><td className="fx-num">{fmtMoneyOrDash(h.old_value)}</td><td className="fx-num">{fmtMoneyOrDash(h.new_value)}</td><td className="fx-num">{fmtPct(h.pct_change)}</td></tr>)}
+        {history.length===0&&<tr><td colSpan={5} className="muted" style={{textAlign:'center',padding:16}}>{loading?'Loading…':'No price changes recorded yet. History starts with the first Price Guide sync after this feature was added.'}</td></tr>}
+      </tbody></table></div>
+    </div>
+    <div className="panel" style={{padding:16}}>
+      <b>Recent orders</b>
+      <div style={{overflowX:'auto',marginTop:8}}><table><thead><tr><th>Order</th><th>Date</th><th>Customer</th><th className="fx-num">Qty</th><th className="fx-num">Price</th></tr></thead><tbody>
+        {recent.map(r=><tr key={r.id}><td>{r.number}</td><td>{fmtDay(r.date)}</td><td>{r.customer||'—'}</td><td className="fx-num">{fmtQty(r.qty)}</td><td className="fx-num">{fmtMoney(r.price)}</td></tr>)}
+        {recent.length===0&&<tr><td colSpan={5} className="muted" style={{textAlign:'center',padding:16}}>{loading?'Loading…':'No confirmed sales found for this product.'}</td></tr>}
+      </tbody></table></div>
+    </div>
+  </>
+}
 function LeadDetail({lead,notes,onSave,onAddNote,onConvert,onDelete,onClose}:{lead:Lead,notes:LeadNote[],onSave:(patch:Record<string,any>)=>Promise<boolean>,onAddNote:(text:string)=>Promise<boolean>,onConvert:()=>Promise<void>,onDelete:()=>Promise<void>,onClose:()=>void}){
   const [interest,setInterest]=useState(lead.interest||'');
   const [source,setSource]=useState(lead.source||'');
@@ -379,6 +504,21 @@ const CUSTOMERS_PER_PAGE = 50;
 const [productCategoryFilter,setProductCategoryFilter]=useState('All');
 const [productPage,setProductPage]=useState(1);
 const [productTotal,setProductTotal]=useState(0);
+// The Products tab has its own page of rows, so the full catalog in `products` (used by the order product picker) is never replaced by one page.
+const [catalogProducts,setCatalogProducts]=useState<Product[]>([]);
+const [productVendorFilter,setProductVendorFilter]=useState('All');
+const [showRetired,setShowRetired]=useState(false);
+const [syncRuns,setSyncRuns]=useState<SyncRun[]>([]);
+const [selectedSyncRunId,setSelectedSyncRunId]=useState('');
+const [syncChanges,setSyncChanges]=useState<SyncChange[]>([]);
+const [syncMissingIds,setSyncMissingIds]=useState<string[]>([]);
+const [syncPanelTab,setSyncPanelTab]=useState<'changed'|'new'|'missing'>('changed');
+const [syncShowAll,setSyncShowAll]=useState(false);
+const [syncHistoryNote,setSyncHistoryNote]=useState('');
+const [selectedProductId,setSelectedProductId]=useState('');
+const [productRecent,setProductRecent]=useState<Array<{id:string,number:string,date:string,customer:string,qty:number,price:number}>>([]);
+const [productPriceHistory,setProductPriceHistory]=useState<SyncChange[]>([]);
+const [productDetailLoading,setProductDetailLoading]=useState(false);
   
 const PRODUCTS_PER_PAGE = 50;
 const [builds,setBuilds]=useState<Build[]>([])
@@ -552,13 +692,22 @@ setCustomerTotal(count || 0);
 async function loadProductsPage(
   page = productPage,
   searchTerm = productSearch,
-  categoryFilter = productCategoryFilter
+  categoryFilter = productCategoryFilter,
+  vendorFilter = productVendorFilter,
+  includeRetired = showRetired
 ){
   let query = s
     .from('products')
     .select('*',{count:'exact'})
-    .eq('active',true)
     .order('name',{ascending:true});
+
+  if(!includeRetired){
+    query = query.eq('active',true);
+  }
+
+  if(vendorFilter !== 'All'){
+    query = query.eq('vendor',vendorFilter);
+  }
 
   if(searchTerm.trim()){
     const term = searchTerm.trim();
@@ -582,7 +731,7 @@ async function loadProductsPage(
     return;
   }
 
-  setProducts((data || []) as Product[]);
+  setCatalogProducts((data || []) as Product[]);
   setProductTotal(count || 0);
 }
 
@@ -609,6 +758,94 @@ async function loadForecast(){
   finally{setForecastLoading(false);}
 }
 useEffect(()=>{if(module==='Inventory'&&['Inventory Forecast','Product Analytics','Vendor Analytics'].includes(tab))void loadForecast();},[module,tab]);
+
+// ---- Products tab: sync results, sales numbers and product page ----
+useEffect(()=>{if(tab==='Products'&&me&&me.role!=='Technician'&&!forecastLoading&&(!forecastUpdated||Date.now()-forecastUpdated.getTime()>300000))void loadForecast();},[tab,me]);
+useEffect(()=>{if(tab==='Products'&&me&&me.role!=='Technician')void loadSyncHistory(false);},[tab,me]);
+useEffect(()=>{if(tab!=='Products')setSelectedProductId('');},[tab]);
+async function loadSyncHistory(selectLatest:boolean){
+  const {data,error}=await s.from('price_sync_log').select('*').order('created_at',{ascending:false}).limit(25);
+  if(error){console.error('Sync history load failed:',error);setSyncRuns([]);setSyncMissingIds([]);setSyncHistoryNote('Sync results are not available yet. Run price_sync_history.sql in Supabase to turn them on.');return;}
+  setSyncHistoryNote('');
+  const runs=(data||[]) as SyncRun[];
+  setSyncRuns(runs);
+  setSelectedSyncRunId(cur=>selectLatest||!runs.some(r=>r.id===cur)?(runs[0]?.id||''):cur);
+  if(runs[0]){
+    const {data:missing}=await s.from('price_sync_changes').select('product_id').eq('run_id',runs[0].id).eq('change_type','missing');
+    setSyncMissingIds(((missing||[]) as Array<{product_id:string|null}>).map(m=>m.product_id).filter((id):id is string=>Boolean(id)));
+  }else setSyncMissingIds([]);
+}
+useEffect(()=>{
+  if(!selectedSyncRunId){setSyncChanges([]);return;}
+  let cancelled=false;
+  (async()=>{
+    const {data,error}=await s.from('price_sync_changes').select('*').eq('run_id',selectedSyncRunId).order('created_at',{ascending:true}).limit(3000);
+    if(cancelled)return;
+    if(error){console.error('Sync changes load failed:',error);setSyncChanges([]);return;}
+    setSyncChanges((data||[]) as SyncChange[]);
+  })();
+  return ()=>{cancelled=true};
+},[selectedSyncRunId]);
+async function markSyncReviewed(change:SyncChange,reviewed:boolean){
+  const patch={reviewed,reviewed_by:reviewed?(me?.name||me?.email||null):null,reviewed_at:reviewed?new Date().toISOString():null};
+  const {data,error}=await s.from('price_sync_changes').update(patch).eq('id',change.id).select('id');
+  if(error||!data||data.length===0){alert('The review mark could not be saved. '+(error?.message||'No rows were updated.'));return;}
+  setSyncChanges(list=>list.map(c=>c.id===change.id?{...c,...patch}:c));
+}
+const syncMissingSet=useMemo(()=>new Set(syncMissingIds),[syncMissingIds]);
+const productFacets=useMemo(()=>({
+  categories:[...new Set(products.map(p=>p.category).filter((c):c is string=>Boolean(c)))].sort(),
+  vendors:[...new Set(products.map(p=>p.vendor).filter((v):v is string=>Boolean(v)))].sort()
+}),[products]);
+const productSales=useMemo(()=>{
+  const map=new Map<string,ProductSales>();
+  const today=new Date();
+  const daysAgo=(raw:string)=>Math.floor((today.getTime()-new Date(raw+'T12:00:00').getTime())/86400000);
+  for(const order of forecastOrders){
+    if(/cancelled|canceled/i.test(order.status))continue;
+    const date=(order.order_date||order.created_at||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
+    const age=daysAgo(date);if(!Number.isFinite(age)||age<0)continue;
+    for(const item of order.order_items||[]){
+      if(item.item_type!=='Product')continue;
+      const qty=Number(item.qty);if(!Number.isFinite(qty)||qty<=0)continue;
+      const key=item.product_id?`id:${item.product_id}`:item.sku?.trim()?`sku:${item.sku.trim().toLowerCase()}`:'';
+      if(!key)continue;
+      let row=map.get(key);
+      if(!row){row={d30:0,d90:0,d365:0,last:'',months:{}};map.set(key,row);}
+      if(age<30)row.d30+=qty;if(age<90)row.d90+=qty;if(age<365)row.d365+=qty;
+      if(date>row.last)row.last=date;
+      const month=date.slice(0,7);row.months[month]=(row.months[month]||0)+qty;
+    }
+  }
+  return map;
+},[forecastOrders]);
+// Each order line is counted once: lines saved with a product link count under that product, older lines are matched by SKU.
+const salesFor=(p:Product):ProductSales=>{
+  const a=productSales.get(`id:${p.id}`);
+  const b=p.sku?productSales.get(`sku:${p.sku.trim().toLowerCase()}`):undefined;
+  const months:Record<string,number>={};
+  for(const x of [a,b]){if(x)for(const [k,v] of Object.entries(x.months))months[k]=(months[k]||0)+v;}
+  return {d30:(a?.d30||0)+(b?.d30||0),d90:(a?.d90||0)+(b?.d90||0),d365:(a?.d365||0)+(b?.d365||0),last:[a?.last||'',b?.last||''].sort().pop()||'',months};
+};
+const salesStillLoading=forecastLoading&&forecastOrders.length===0;
+const selectedProduct=selectedProductId?(catalogProducts.find(p=>p.id===selectedProductId)||products.find(p=>p.id===selectedProductId)||null):null;
+async function openProduct(p:Product){
+  setSelectedProductId(p.id);setProductRecent([]);setProductPriceHistory([]);setProductDetailLoading(true);
+  const skuPart=p.sku?`,sku.eq."${p.sku.replace(/"/g,'')}"`:'';
+  const [recent,history]=await Promise.all([
+    s.from('order_items').select('id,qty,sell_price,item_type,orders(order_number,status,order_date,created_at,customers(name))').or(`product_id.eq.${p.id}${skuPart}`).order('created_at',{ascending:false}).limit(60),
+    s.from('price_sync_changes').select('*').eq('product_id',p.id).eq('change_type','changed').order('created_at',{ascending:false}).limit(30)
+  ]);
+  const first=(v:any)=>Array.isArray(v)?v[0]:v;
+  const lines=((recent.data||[]) as any[]).map(r=>{
+    const o=first(r.orders);
+    return {id:String(r.id),type:r.item_type,status:String(o?.status||''),number:String(o?.order_number||'—'),date:String(o?.order_date||o?.created_at||'').slice(0,10),customer:String(first(o?.customers)?.name||''),qty:Number(r.qty),price:Number(r.sell_price)};
+  }).filter(r=>r.type==='Product'&&r.status!=='Draft'&&!/cancelled|canceled/i.test(r.status)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  setProductRecent(lines.map(({id,number,date,customer,qty,price})=>({id,number,date,customer,qty,price})));
+  setProductPriceHistory(history.error?[]:((history.data||[]) as SyncChange[]));
+  setProductDetailLoading(false);
+}
 const forecastRows=useMemo(()=>{
   const grouped=new Map<string,{key:string,sku:string,name:string,vendor:string,category:string,total:number,revenue:number,last30:number,last90:number,last365:number,period:number,months:Record<string,number>}>();
   const now=new Date();const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
@@ -668,12 +905,14 @@ useEffect(()=>{
     loadProductsPage(
       productPage,
       productSearch,
-      productCategoryFilter
+      productCategoryFilter,
+      productVendorFilter,
+      showRetired
     );
   },300);
 
   return ()=>clearTimeout(timer);
-},[tab,productPage,productSearch,productCategoryFilter]);
+},[tab,productPage,productSearch,productCategoryFilter,productVendorFilter,showRetired]);
  // Keep ERP navigation in browser history without changing the Next.js page route.
  // Query parameters also let a bookmarked view survive a refresh.
  useEffect(()=>{
@@ -803,17 +1042,27 @@ async function syncPriceGuide(){
     }
 
     await load();
+    await loadSyncHistory(true);
+    await loadProductsPage();
 
 alert(
   `Price Guide sync complete!\n\n`+
   `Added: ${result.added}\n`+
   `Updated: ${result.updated}\n`+
+  (typeof result.price_changes==='number'
+    ? `Products with price changes: ${result.price_changes}\n`+
+      `Need review: ${result.needs_review||0}\n`+
+      `No longer in sheet: ${result.missing_from_sheet||0}\n`
+    : '')+
   `Skipped: ${result.skipped}`+
   (result.skipped_details?.length
     ? `\n\nSkipped Details:\n${result.skipped_details.join('\n')}`
     : '')+
   (result.errors?.length
     ? `\n\nErrors:\n${result.errors.join('\n')}`
+    : '')+
+  (result.warnings?.length
+    ? `\n\nNote:\n${result.warnings.join('\n')}`
     : '')
 )
   }catch(error){
@@ -2318,7 +2567,18 @@ onChange={e=>{
   <ListPagination page={safeForecastPage} onPageChange={setForecastPage} total={filteredForecastRows.length}/>
   <p className="muted" style={{fontSize:12,marginTop:12}}>*Simple demand estimate using the last 90 days divided by three; not a purchase recommendation. On Hand, Incoming, and Supply are intentionally blank until stock tracking is enabled. This report does not change stock or orders.</p>
 </div>}
-{tab==='Products'&&<>
+{tab==='Products'&&(selectedProduct?
+<ProductDetail
+  product={selectedProduct}
+  sales={salesFor(selectedProduct)}
+  salesLoading={salesStillLoading}
+  recent={productRecent}
+  history={productPriceHistory}
+  loading={productDetailLoading}
+  notInSheet={syncMissingSet.has(selectedProduct.id)}
+  onBack={()=>setSelectedProductId('')}
+/>
+:<>
 <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
   <div className="row">
     <b>Product catalog</b>
@@ -2332,7 +2592,20 @@ onChange={e=>{
   </button>
 </div>
 
-<div className="row" style={{marginBottom:12}}>
+<SyncResultsPanel
+  runs={syncRuns}
+  selectedRunId={selectedSyncRunId}
+  onSelectRun={setSelectedSyncRunId}
+  changes={syncChanges}
+  onReview={markSyncReviewed}
+  tab={syncPanelTab}
+  onTab={setSyncPanelTab}
+  showAll={syncShowAll}
+  onShowAll={setSyncShowAll}
+  note={syncHistoryNote}
+/>
+
+<div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
   <input
     placeholder="Search name, SKU, vendor, or category..."
     value={productSearch}
@@ -2343,24 +2616,53 @@ onChange={e=>{
     style={{padding:9,width:320}}
   />
   <select
-  value={productCategoryFilter}
-  onChange={e=>{
-    setProductCategoryFilter(e.target.value);
-    setProductPage(1);
-  }}
-  style={{padding:9}}
->
-  <option value="All">All Categories</option>
-  {[...new Set(products.map(p=>p.category).filter((category): category is string => Boolean(category)))]
-    .sort()
-    .map(category=>
+    value={productCategoryFilter}
+    onChange={e=>{
+      setProductCategoryFilter(e.target.value);
+      setProductPage(1);
+    }}
+    style={{padding:9}}
+  >
+    <option value="All">All Categories</option>
+    {productFacets.categories.map(category=>
       <option key={category} value={category}>
         {category}
       </option>
     )}
-</select>
+  </select>
+  <select
+    value={productVendorFilter}
+    onChange={e=>{
+      setProductVendorFilter(e.target.value);
+      setProductPage(1);
+    }}
+    style={{padding:9}}
+  >
+    <option value="All">All Vendors</option>
+    {productFacets.vendors.map(vendor=>
+      <option key={vendor} value={vendor}>
+        {vendor}
+      </option>
+    )}
+  </select>
+  <label className="row" style={{gap:6,fontSize:14}}>
+    <input
+      type="checkbox"
+      checked={showRetired}
+      onChange={e=>{
+        setShowRetired(e.target.checked);
+        setProductPage(1);
+      }}
+    />
+    Show retired
+  </label>
 </div>
-  <div className="panel"><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th className="fx-num">Sell</th><th className="fx-num">Cost</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td><b>{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td className="fx-num">{fmtMoney(Number(p.sell_price))}</td><td className="fx-num">{p.cost==null?'—':fmtMoney(Number(p.cost))}</td></tr>)}</tbody></table></div>
+  <div className="panel" style={{overflowX:'auto'}}><table><thead><tr><th>SKU</th><th>Product</th><th>Vendor</th><th>Category</th><th className="fx-num">Sell</th><th className="fx-num">Cost</th><th className="fx-num">Margin</th><th className="fx-num">Sold 90d</th><th>Status</th></tr></thead><tbody>{catalogProducts.map(p=>{
+    const sale=salesFor(p);
+    const status=p.active===false?['Retired','neutral']:syncMissingSet.has(p.id)?['Not in sheet','warn']:['Active','ok'];
+    const margin=p.cost!=null&&Number(p.sell_price)>0?(Number(p.sell_price)-Number(p.cost))/Number(p.sell_price)*100:null;
+    return <tr key={p.id} className="fx-row" onClick={()=>void openProduct(p)}><td>{p.sku}</td><td><b className="fx-link">{p.name}</b></td><td>{p.vendor}</td><td>{p.category}</td><td className="fx-num">{fmtMoney(Number(p.sell_price))}</td><td className="fx-num">{p.cost==null?'—':fmtMoney(Number(p.cost))}</td><td className="fx-num">{margin==null?'—':`${margin.toFixed(1)}%`}</td><td className="fx-num">{salesStillLoading?'…':fmtQty(sale.d90)}</td><td><span className={`fx-badge fx-${status[1]}`}>{status[0]}</span></td></tr>;
+  })}</tbody></table></div>
 <div
   className="row"
   style={{justifyContent:'space-between',marginTop:12}}
@@ -2404,7 +2706,7 @@ onChange={e=>{
     </button>
   </div>
 </div>
-</>}
+</>)}
 {(tab==='Orders'||tab==='Quotations')&&<>
   <div className="row" style={{justifyContent:'space-between',marginBottom:12}}>
     <button
