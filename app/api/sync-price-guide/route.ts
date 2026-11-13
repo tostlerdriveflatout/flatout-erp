@@ -172,6 +172,11 @@ export async function POST(request: NextRequest) {
         if (!name || sellPrice === null) return null
 
         const sku = cleanText(row[skuIndex])
+
+        // A SKU is required. Without one, a product can't be matched later
+        // and adding the SKU afterwards would create a duplicate.
+        if (!sku) return null
+
         const vendor =
           companyIndex >= 0 ? cleanText(row[companyIndex]) : null
 
@@ -233,6 +238,8 @@ rows.slice(1).forEach((row, index) => {
     skippedDetails.push(`Row ${sheetRow}: Missing Description`)
   } else if (sellPrice === null) {
     skippedDetails.push(`Row ${sheetRow}: ${name} — Missing or invalid Retail price`)
+  } else if (!cleanText(row[skuIndex])) {
+    skippedDetails.push(`Row ${sheetRow}: ${name} — Missing SKU (will import once a SKU is added)`)
   }
 })
 
@@ -301,6 +308,7 @@ rows.slice(1).forEach((row, index) => {
       added,
       updated,
       skipped,
+      skipped_details: skippedDetails,
       errors,
       synced_by: user.email,
       synced_at: new Date().toISOString(),
