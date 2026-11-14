@@ -1879,8 +1879,15 @@ return <div className="shell">
 <style>{FX_CSS}</style>
   <aside className={`side ${mobileMenuOpen?"mobile-open":""}`}>
     <img
-      className="logo"
+      className="logo logoWord"
       src="/flatout-logo.svg"
+      onClick={()=>{setMobileMenuOpen(false);setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[module]||'Dashboard');}}
+      style={{cursor:'pointer'}}
+    />
+    <img
+      className="logoIcon"
+      src="/fsr-icon.png"
+      alt="Flatout Sim Racing"
       onClick={()=>{setMobileMenuOpen(false);setTab(({Sales:'Dashboard',Purchases:'Purchasing',Builds:'Builds',Inventory:'Inventory Forecast',Accounting:'Sales Accounting Overview',Employees:'Employees'} as Record<string,string>)[module]||'Dashboard');}}
       style={{cursor:'pointer'}}
     />
