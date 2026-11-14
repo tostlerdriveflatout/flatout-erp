@@ -75,15 +75,13 @@ return (
         className="loginbox"
         onSubmit={forgotPassword ? resetPassword : go}
       >
-        <img src="/flatout-logo.svg" />
+        <img className="loginIcon" src="/fsr-icon.png" alt="Flatout Sim Racing" />
 
-        <h1>FLATOUT ERP</h1>
-
-        <p className="muted">
-          {forgotPassword
-            ? 'Reset your ERP password'
-            : 'Internal operations system'}
-        </p>
+        {forgotPassword && (
+          <p className="muted" style={{ textAlign: 'center' }}>
+            Reset your ERP password
+          </p>
+        )}
 
         <div className="field">
           <label>Email</label>
