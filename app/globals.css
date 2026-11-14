@@ -151,6 +151,9 @@
    is inside @media(max-width:900px), so desktop is unchanged. */
 .userName{display:none}
 @media(max-width:900px){
+  /* Dark page canvas so the area behind the phone's status bar matches the header (installed app) */
+  html{background:#111}
+  body{background:var(--bg);min-height:100vh;min-height:100dvh}
   /* Slim page header: title + signed-in name + Log out on one row */
   .top{min-height:0;padding:8px 14px;flex-wrap:nowrap;align-items:center;gap:8px}
   .top>div:first-child{min-width:0}
