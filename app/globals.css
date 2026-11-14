@@ -146,3 +146,47 @@
   .buildDetailFacts>.card{padding:11px}
   .buildPartsPanel{padding:10px}
 }
+
+/* Phase 3: mobile polish + installable app. Everything that changes layout
+   is inside @media(max-width:900px), so desktop is unchanged. */
+.userName{display:none}
+@media(max-width:900px){
+  /* Slim page header: title + signed-in name + Log out on one row */
+  .top{min-height:0;padding:8px 14px;flex-wrap:nowrap;align-items:center;gap:8px}
+  .top>div:first-child{min-width:0}
+  .top>div:first-child>b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .top>div:first-child>.muted{display:none}
+  .top>.row{margin-left:auto;flex-wrap:nowrap;justify-content:flex-end;gap:8px;flex:0 0 auto}
+  .top .userEmail{display:none}
+  .top .userName{display:inline-block;font-size:12px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .top .btn{min-height:36px;padding:6px 12px;white-space:nowrap}
+  /* Module tabs fade at the right edge so it is clear they scroll */
+  .moduleNav{-webkit-mask-image:linear-gradient(to right,#000 88%,transparent);mask-image:linear-gradient(to right,#000 88%,transparent)}
+  /* Buttons never wrap; comfortable tap size */
+  .content .btn{white-space:nowrap;min-height:44px}
+  .content .row{flex-wrap:wrap}
+  /* Search boxes in toolbars use the full row */
+  .content input[placeholder]:not(.modal input):not(td input):not(th input){width:100%!important;min-height:44px;font-size:16px}
+  .content select{min-height:44px;font-size:16px}
+  /* Selected filter / tab button reads as selected */
+  body .btn.fx-selected{background:#E71D36!important;color:#fff!important;box-shadow:none!important}
+  /* Panels without their own padding: same side inset as the panel heading */
+  .panel:not([style*="padding"])>*:not(h2):not(table):not(.tableWrap){margin-left:16px;margin-right:16px}
+  .panel:not([style*="padding"])>.row h2{padding:0;border:0}
+  .panel:not([style*="padding"])>.row{margin-top:12px;align-items:flex-start;flex-wrap:nowrap}
+  .panel:not([style*="padding"])>.row>div{min-width:0}
+  .panel:not([style*="padding"])>input,.panel:not([style*="padding"])>select{width:calc(100% - 32px)!important;min-height:44px;font-size:16px}
+  .panel:not([style*="padding"])>textarea{width:calc(100% - 32px)}
+  .panel:not([style*="padding"])>.field textarea,.field textarea{width:100%}
+  .panel:not([style*="padding"])>.btn{margin-bottom:12px}
+  /* Accounting forms: one field per row, full-width submit */
+  section.panel form .row{display:block;margin:0}
+  section.panel form .row>.field{display:block;min-width:0!important;margin:10px 0}
+  section.panel form>.btn{width:100%;margin:8px 0 12px}
+  /* Fields and date pickers never overflow their card */
+  .field input,.field select,.field textarea{width:100%;max-width:100%;min-width:0;box-sizing:border-box;font-size:16px}
+  input[type=date]{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;min-height:44px;-webkit-appearance:none;appearance:none;text-align:left}
+  textarea{max-width:100%;box-sizing:border-box}
+  /* Room for the iPhone home indicator when installed */
+  .content{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+}
