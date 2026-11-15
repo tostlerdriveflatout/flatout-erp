@@ -8,11 +8,11 @@
   html,body{max-width:100%;overflow-x:hidden}
   .shell{display:block;min-width:0}
   .main{width:100%;min-width:0;max-width:100%}
-  .mobileHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#111;color:#fff;padding:10px 14px;min-height:54px}
+  .mobileHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#111;color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;min-height:calc(54px + env(safe-area-inset-top,0px))}
   .mobileHeader strong{font-size:14px;letter-spacing:.04em}
   .mobileHeader span{font-size:12px;color:#ddd}
   .mobileMenuToggle{min-height:40px}
-  .side.mobile-open{display:block;position:absolute;top:54px;left:0;width:min(300px,85vw);z-index:100;background:#000;box-shadow:0 12px 30px #0006;padding:16px}
+  .side.mobile-open{display:block;position:absolute;top:calc(54px + env(safe-area-inset-top,0px));left:0;width:min(300px,85vw);z-index:100;background:#000;box-shadow:0 12px 30px #0006;padding:16px}
   .side.mobile-open .logo{width:145px;margin-bottom:12px}
   .side .logoWord{display:none}
   .side .logoIcon{display:block;height:44px;width:auto;filter:invert(1);margin:2px 0 14px}
@@ -51,7 +51,7 @@
   .invoice-meta{grid-template-columns:1fr;gap:14px}
   input,select,textarea{max-width:100%}
 }
-@media(max-width:390px){.content{padding:10px}.card{padding:10px}.top{padding:10px}.mobileHeader{padding:8px 10px}}
+@media(max-width:390px){.content{padding:10px}.card{padding:10px}.top{padding:10px}.mobileHeader{padding:calc(8px + env(safe-area-inset-top,0px)) 10px 8px}}
 @media print{.mobileHeader{display:none!important}.moduleNav{display:none!important}}
 
 /* Phase 2: mobile purchasing and build workflow cards */
@@ -156,6 +156,8 @@
   /* Dark page canvas so the area behind the phone's status bar matches the header (installed app) */
   html{background:#111}
   body{background:var(--bg);min-height:100vh;min-height:100dvh}
+  /* Installed app: solid black bar behind the clock/battery, even when the page scrolls */
+  body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:#111;z-index:2000;pointer-events:none}
   /* Slim page header: title + signed-in name + Log out on one row */
   .top{min-height:0;padding:8px 14px;flex-wrap:nowrap;align-items:center;gap:8px}
   .top>div:first-child{min-width:0}
