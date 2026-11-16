@@ -203,3 +203,30 @@
 
 /* Login screen shows the FSR icon (black on the white card). */
 .loginbox img.loginIcon{width:170px;height:auto;margin:8px auto 28px;display:block}
+
+/* Phone cards for lists and the invoice. Screen only, so desktop and printing/PDF stay exactly as they were. */
+.phoneCards{display:none}
+@media screen and (max-width:900px){
+  .phoneHide{display:none!important}
+  .phoneCards{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px;margin-bottom:12px}
+  .phoneCards .mobileWorkCard{background:#fff;border:1px solid var(--platinum);border-radius:10px;padding:12px;min-width:0;overflow-wrap:anywhere}
+  .phoneCards .tapCard{cursor:pointer}
+  .phoneCards .mobileFacts{margin:12px 0 4px}
+  .phoneCards .mobileFacts a{color:inherit;text-decoration:underline}
+  .phoneEdit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 8px}
+  .phoneEdit label,.phoneStatus{display:flex;flex-direction:column;gap:3px;font-size:11px;color:#6b7177;min-width:0}
+  .phoneEdit input{width:100%!important;min-width:0;min-height:44px;text-align:right;font-size:16px}
+  .phoneStatus select{width:100%;min-height:44px;font-size:16px}
+  .phoneBtns{display:flex;gap:8px;margin-top:10px}
+  .phoneBtns .btn{flex:1;min-height:44px}
+  .phoneFull{width:100%;min-height:44px;margin-top:10px}
+  .invoiceCards{gap:0;margin-top:8px}
+  .invLine{padding:12px 0;border-bottom:1px solid #e5e5e5}
+  .invLineName{font-weight:700;line-height:1.35}
+  .invLineSku{font-size:12px;margin-top:2px}
+  .invLineNums{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-size:14px}
+  .invLineNums small{display:block;color:#6b7177;font-size:11px}
+  .invLineAmt{text-align:right}
+  /* Build Parts / purchasing status badges stay on one line */
+  .mobileStatus{white-space:nowrap;max-width:none;flex:none}
+}
